@@ -35,6 +35,15 @@ public class PedidoService {
             pedido.setEstado(nuevoEstado);
         return pedidoRepository.save(pedido);
     }
+    public Pedido actualizarPedido(Long id, Pedido pedidoActualizado) {
+        Pedido pedido = pedidoRepository.findById(id)
+                .orElseThrow(() -> new PedidoNoEncontradoException("Pedido no encontrado"));
+
+        pedido.setDireccionEntrega(pedidoActualizado.getDireccionEntrega());
+        pedido.setEstado(pedidoActualizado.getEstado());
+
+        return pedidoRepository.save(pedido);
+    }
     public void eliminarPedido(Long id) {
         if (!pedidoRepository.existsById(id)) {
                 throw new PedidoNoEncontradoException("Pedido no encontrado con id: " + id);
@@ -44,4 +53,5 @@ public class PedidoService {
     public List<Pedido> filtrarPorEstado(EstadoPedido estado) {
         return pedidoRepository.findByEstado(estado);
     }
+    
 }

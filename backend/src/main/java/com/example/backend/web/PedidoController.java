@@ -39,6 +39,10 @@ public class PedidoController {
     public Pedido obtenerPedido(@PathVariable Long id) {
         return pedidoService.obtenerPorId(id);
     }
+    @PutMapping("/{id}")
+    public Pedido actualizarPedido(@PathVariable Long id, @RequestBody Pedido pedido) {
+        return pedidoService.actualizarPedido(id, pedido);
+    }
    @PutMapping("/{id}/estado")
     public Pedido actualizarEstado(@PathVariable Long id, @RequestParam EstadoPedido estado) {
         return pedidoService.actualizarEstado(id, estado);
