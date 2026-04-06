@@ -2,6 +2,8 @@ package com.example.backend.entity;
 
 import java.time.LocalDateTime;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -12,6 +14,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
+
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 @Entity
 @Table(name = "pedidos")
 public class Pedido {
@@ -28,7 +32,27 @@ public class Pedido {
     @Enumerated(EnumType.STRING)
     private EstadoPedido estado;
 
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime fechaCreacion;
+
+    private String zona;
+
+    private Double peso;
+
+    @Enumerated(EnumType.STRING)
+    private TipoTamano tamano;
+
+    private Boolean fragil;
+
+    @NotNull(message = "El tipo de cobro es obligatorio")
+    @Enumerated(EnumType.STRING)
+    private TipoCobro tipoCobro;
+
+    private Boolean prioritario;
+
+    private String clienteEmail;
+
+    private String repartidorEmail;
 
     public Pedido() {
         this.fechaCreacion = LocalDateTime.now();
@@ -56,5 +80,69 @@ public class Pedido {
 
     public LocalDateTime getFechaCreacion() {
         return fechaCreacion;
+    }
+
+    public String getZona() {
+        return zona;
+    }
+
+    public void setZona(String zona) {
+        this.zona = zona;
+    }
+
+    public Double getPeso() {
+        return peso;
+    }
+
+    public void setPeso(Double peso) {
+        this.peso = peso;
+    }
+
+    public TipoTamano getTamano() {
+        return tamano;
+    }
+
+    public void setTamano(TipoTamano tamano) {
+        this.tamano = tamano;
+    }
+
+    public Boolean getFragil() {
+        return fragil;
+    }
+
+    public void setFragil(Boolean fragil) {
+        this.fragil = fragil;
+    }
+
+    public TipoCobro getTipoCobro() {
+        return tipoCobro;
+    }
+
+    public void setTipoCobro(TipoCobro tipoCobro) {
+        this.tipoCobro = tipoCobro;
+    }
+
+    public Boolean getPrioritario() {
+        return prioritario;
+    }
+
+    public void setPrioritario(Boolean prioritario) {
+        this.prioritario = prioritario;
+    }
+
+    public String getClienteEmail() {
+        return clienteEmail;
+    }
+
+    public void setClienteEmail(String clienteEmail) {
+        this.clienteEmail = clienteEmail;
+    }
+
+    public String getRepartidorEmail() {
+        return repartidorEmail;
+    }
+
+    public void setRepartidorEmail(String repartidorEmail) {
+        this.repartidorEmail = repartidorEmail;
     }
 }

@@ -8,7 +8,10 @@ import com.example.backend.entity.Pedido;
 public interface PedidoRepository extends JpaRepository<Pedido, Long> {
 
     List<Pedido> findByEstado(EstadoPedido estado);
-    
+
+    List<Pedido> findByClienteEmail(String clienteEmail);
+
+    List<Pedido> findByRepartidorEmail(String repartidorEmail);
 }
 
 

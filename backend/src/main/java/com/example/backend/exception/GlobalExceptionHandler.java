@@ -18,4 +18,14 @@ public class GlobalExceptionHandler {
                 "mensaje", ex.getMessage()
         );
     }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Map<String, Object> manejarValidacionNegocio(IllegalArgumentException ex) {
+        return Map.of(
+                "timestamp", LocalDateTime.now(),
+                "error", "BAD_REQUEST",
+                "mensaje", ex.getMessage()
+        );
+    }
 }

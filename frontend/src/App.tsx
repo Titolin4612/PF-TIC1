@@ -1,11 +1,16 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import type { FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   actualizarEstado,
   crearPedido,
   eliminarPedido,
   obtenerPedidos,
+  type EstadoPedido,
+  type Pedido,
+  type PedidoInput,
+  type TipoCobro,
+  type TipoTamano,
 } from "./api/pedidoApi";
-import type { EstadoPedido, Pedido } from "./api/pedidoApi";
 import "./styles/app.css";
 
 const estadoOptions: EstadoPedido[] = [
@@ -16,36 +21,35 @@ const estadoOptions: EstadoPedido[] = [
   "CANCELADO",
 ];
 
-const estadoMeta: Record<
-  EstadoPedido,
-  { label: string; tone: "neutral" | "info" | "success" | "warning" | "danger" }
-> = {
-  CREADO: { label: "Creado", tone: "neutral" },
-  EN_PREPARACION: { label: "Preparación", tone: "warning" },
-  EN_CAMINO: { label: "En ruta", tone: "info" },
-  ENTREGADO: { label: "Entregado", tone: "success" },
-  CANCELADO: { label: "Cancelado", tone: "danger" },
+const tamanoOptions: TipoTamano[] = ["PEQUENO", "MEDIANO", "GRANDE"];
+const cobroOptions: TipoCobro[] = ["CONTRA_ENTREGA", "WEB"];
+
+const initialForm: PedidoInput = {
+  direccionEntrega: "",
+  estado: "CREADO",
+  zona: "",
+  peso: 1,
+  tamano: "MEDIANO",
+  fragil: false,
+  tipoCobro: "CONTRA_ENTREGA",
+  prioritario: false,
 };
 
 function App() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
+  const [form, setForm] = useState<PedidoInput>(initialForm);
   const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [rowAction, setRowAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [accionEnProgreso, setAccionEnProgreso] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    direccionEntrega: "",
-    estado: "CREADO" as EstadoPedido,
-  });
 
   const stats = useMemo(() => {
     const total = pedidos.length;
-    const enRuta = pedidos.filter((p) => p.estado === "EN_CAMINO").length;
+    const creados = pedidos.filter((p) => p.estado === "CREADO").length;
+    const enProceso = pedidos.filter((p) => p.estado === "EN_PREPARACION").length;
     const entregados = pedidos.filter((p) => p.estado === "ENTREGADO").length;
     const cancelados = pedidos.filter((p) => p.estado === "CANCELADO").length;
-    const pendientes = pedidos.filter(
-      (p) => p.estado === "CREADO" || p.estado === "EN_PREPARACION"
-    ).length;
-    return { total, enRuta, entregados, cancelados, pendientes };
+    return { total, creados, enProceso, entregados, cancelados };
   }, [pedidos]);
 
   const cargarPedidos = async () => {
@@ -53,12 +57,9 @@ function App() {
     setError(null);
     try {
       const data = await obtenerPedidos();
-      if (!Array.isArray(data)) {
-        throw new Error("Formato de datos inesperado al obtener pedidos");
-      }
-      setPedidos(data);
+      setPedidos(Array.isArray(data) ? data : []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al obtener pedidos");
+      setError(err instanceof Error ? err.message : "Error al cargar pedidos");
     } finally {
       setLoading(false);
     }
@@ -70,40 +71,35 @@ function App() {
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!form.direccionEntrega.trim()) {
-      setError("La dirección es obligatoria");
-      return;
-    }
-    setAccionEnProgreso("crear");
+    setCreating(true);
     setError(null);
+
     try {
       await crearPedido(form);
-      setForm({ direccionEntrega: "", estado: "CREADO" });
+      setForm(initialForm);
       await cargarPedidos();
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo crear el pedido");
     } finally {
-      setAccionEnProgreso(null);
+      setCreating(false);
     }
   };
 
   const handleCambiarEstado = async (id: number, estado: EstadoPedido) => {
-    setAccionEnProgreso(`estado-${id}`);
+    setRowAction(`estado-${id}`);
     setError(null);
     try {
       await actualizarEstado(id, estado);
       await cargarPedidos();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "No se pudo actualizar el estado"
-      );
+      setError(err instanceof Error ? err.message : "No se pudo actualizar el estado");
     } finally {
-      setAccionEnProgreso(null);
+      setRowAction(null);
     }
   };
 
   const handleEliminar = async (id: number) => {
-    setAccionEnProgreso(`eliminar-${id}`);
+    setRowAction(`eliminar-${id}`);
     setError(null);
     try {
       await eliminarPedido(id);
@@ -111,7 +107,7 @@ function App() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo eliminar el pedido");
     } finally {
-      setAccionEnProgreso(null);
+      setRowAction(null);
     }
   };
 
@@ -127,8 +123,8 @@ function App() {
         </div>
         <nav className="nav">
           <button className="nav__item">Dashboard</button>
-          <button className="nav__item nav__item--active">Gestión de Pedidos</button>
-          <button className="nav__item">Gestión de Rutas</button>
+          <button className="nav__item nav__item--active">Gestion de Pedidos</button>
+          <button className="nav__item">Gestion de Rutas</button>
         </nav>
         <div className="user-chip">Gerente</div>
       </header>
@@ -136,12 +132,16 @@ function App() {
       <main className="content">
         <section className="kpi-grid">
           <article className="kpi-card">
-            <p className="kpi-label">Pedidos pendientes</p>
-            <p className="kpi-value">{stats.pendientes}</p>
+            <p className="kpi-label">Total</p>
+            <p className="kpi-value">{stats.total}</p>
           </article>
           <article className="kpi-card">
-            <p className="kpi-label">En ruta</p>
-            <p className="kpi-value">{stats.enRuta}</p>
+            <p className="kpi-label">Creados</p>
+            <p className="kpi-value">{stats.creados}</p>
+          </article>
+          <article className="kpi-card">
+            <p className="kpi-label">En proceso</p>
+            <p className="kpi-value">{stats.enProceso}</p>
           </article>
           <article className="kpi-card">
             <p className="kpi-label">Entregados</p>
@@ -158,17 +158,11 @@ function App() {
             <div className="card__header card__header--split">
               <div>
                 <p className="eyebrow">Operaciones</p>
-                <h2>Gestión de pedidos</h2>
+                <h2>Listado de pedidos</h2>
               </div>
-              <div className="header-actions">
-                <button
-                  className="button ghost"
-                  onClick={cargarPedidos}
-                  disabled={loading}
-                >
-                  {loading ? "Actualizando..." : "Refrescar"}
-                </button>
-              </div>
+              <button className="button ghost" onClick={cargarPedidos} disabled={loading}>
+                {loading ? "Actualizando..." : "Refrescar"}
+              </button>
             </div>
 
             {error && <div className="alert alert--error">{error}</div>}
@@ -181,57 +175,36 @@ function App() {
               </div>
             ) : pedidos.length === 0 ? (
               <div className="empty">
-                <p className="empty__title">Sin pedidos aún</p>
-                <p className="empty__body">
-                  Crea tu primer pedido para comenzar a despachar.
-                </p>
+                <p className="empty__title">Sin pedidos</p>
+                <p className="empty__body">Crea un pedido para ver datos aqui.</p>
               </div>
             ) : (
               <div className="table-wrapper">
                 <table className="table orders-table">
                   <thead>
                     <tr>
-                      <th>ID</th>
-                      <th>Dirección</th>
+                      <th>Direccion</th>
                       <th>Estado</th>
-                      <th className="is-optional">Ventana</th>
-                      <th className="is-optional">Prioridad</th>
-                      <th className="is-optional">Repartidor</th>
-                      <th>Creado</th>
+                      <th>Zona</th>
+                      <th>Peso</th>
+                      <th>Tamano</th>
+                      <th>Fragil</th>
+                      <th>Tipo cobro</th>
+                      <th>Prioritario</th>
                       <th>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {pedidos.map((pedido) => (
-                      <tr key={pedido.id} className="orders-row">
-                        <td className="mono">#{pedido.id}</td>
+                      <tr key={pedido.id}>
                         <td>{pedido.direccionEntrega}</td>
-                        <td>
-                          <span
-                            className={`status-badge status-${estadoMeta[pedido.estado].tone}`}
-                          >
-                            {estadoMeta[pedido.estado].label}
-                          </span>
-                        </td>
-                        <td className="is-optional">
-                          <span className="placeholder-badge">N/D</span>
-                        </td>
-                        <td className="is-optional">
-                          <span className="placeholder-badge">N/D</span>
-                        </td>
-                        <td className="is-optional">
-                          <span className="placeholder-badge">N/D</span>
-                        </td>
-                        <td>
-                          {(() => {
-                            const fecha = pedido.fechaCreacion
-                              ? new Date(pedido.fechaCreacion)
-                              : null;
-                            return fecha && !isNaN(fecha.getTime())
-                              ? fecha.toLocaleString("es-ES")
-                              : "—";
-                          })()}
-                        </td>
+                        <td>{pedido.estado}</td>
+                        <td>{pedido.zona}</td>
+                        <td>{pedido.peso}</td>
+                        <td>{pedido.tamano}</td>
+                        <td>{pedido.fragil === true ? "Si" : "No"}</td>
+                        <td>{pedido.tipoCobro}</td>
+                        <td>{pedido.prioritario === true ? "Si" : "No"}</td>
                         <td className="actions">
                           <select
                             className="input-inline"
@@ -242,20 +215,20 @@ function App() {
                                 e.target.value as EstadoPedido
                               )
                             }
-                            disabled={accionEnProgreso === `estado-${pedido.id}`}
+                            disabled={rowAction === `estado-${pedido.id}`}
                           >
                             {estadoOptions.map((estado) => (
                               <option key={estado} value={estado}>
-                                {estadoMeta[estado].label}
+                                {estado}
                               </option>
                             ))}
                           </select>
                           <button
                             className="button danger"
                             onClick={() => handleEliminar(pedido.id)}
-                            disabled={accionEnProgreso === `eliminar-${pedido.id}`}
+                            disabled={rowAction === `eliminar-${pedido.id}`}
                           >
-                            {accionEnProgreso === `eliminar-${pedido.id}`
+                            {rowAction === `eliminar-${pedido.id}`
                               ? "Eliminando..."
                               : "Eliminar"}
                           </button>
@@ -275,60 +248,127 @@ function App() {
             </div>
             <form className="form" onSubmit={handleSubmit}>
               <div className="form__row">
-                <label htmlFor="direccion">Dirección de entrega</label>
+                <label htmlFor="direccionEntrega">Direccion</label>
                 <input
-                  id="direccion"
-                  type="text"
+                  id="direccionEntrega"
                   value={form.direccionEntrega}
                   onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      direccionEntrega: e.target.value,
-                    }))
+                    setForm((prev) => ({ ...prev, direccionEntrega: e.target.value }))
                   }
-                  placeholder="Ej. Calle 10 #43-25, El Poblado"
+                  required
                 />
               </div>
+
+              <div className="form__row form__row--two">
+                <div>
+                  <label htmlFor="estado">Estado</label>
+                  <select
+                    id="estado"
+                    value={form.estado}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, estado: e.target.value as EstadoPedido }))
+                    }
+                  >
+                    {estadoOptions.map((estado) => (
+                      <option key={estado} value={estado}>
+                        {estado}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="zona">Zona</label>
+                  <input
+                    id="zona"
+                    value={form.zona}
+                    onChange={(e) => setForm((prev) => ({ ...prev, zona: e.target.value }))}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form__row form__row--two">
+                <div>
+                  <label htmlFor="peso">Peso</label>
+                  <input
+                    id="peso"
+                    type="number"
+                    min={0.1}
+                    step={0.1}
+                    value={form.peso}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        peso: Number.parseFloat(e.target.value || "0"),
+                      }))
+                    }
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="tamano">Tamano</label>
+                  <select
+                    id="tamano"
+                    value={form.tamano}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, tamano: e.target.value as TipoTamano }))
+                    }
+                  >
+                    {tamanoOptions.map((tamano) => (
+                      <option key={tamano} value={tamano}>
+                        {tamano}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               <div className="form__row">
-                <label htmlFor="estado">Estado inicial</label>
+                <label htmlFor="tipoCobro">Tipo de cobro</label>
                 <select
-                  id="estado"
-                  value={form.estado}
+                  id="tipoCobro"
+                  value={form.tipoCobro}
                   onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      estado: e.target.value as EstadoPedido,
-                    }))
+                    setForm((prev) => ({ ...prev, tipoCobro: e.target.value as TipoCobro }))
                   }
                 >
-                  {estadoOptions.map((estado) => (
-                    <option key={estado} value={estado}>
-                      {estadoMeta[estado].label}
+                  {cobroOptions.map((cobro) => (
+                    <option key={cobro} value={cobro}>
+                      {cobro}
                     </option>
                   ))}
                 </select>
               </div>
+
+              <div className="check-row">
+                <label className="check-input">
+                  <input
+                    type="checkbox"
+                    checked={form.fragil}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, fragil: e.target.checked }))
+                    }
+                  />
+                  Fragil
+                </label>
+                <label className="check-input">
+                  <input
+                    type="checkbox"
+                    checked={form.prioritario}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, prioritario: e.target.checked }))
+                    }
+                  />
+                  Prioritario
+                </label>
+              </div>
+
               <div className="form__actions">
-                <button
-                  type="submit"
-                  disabled={accionEnProgreso === "crear"}
-                  className="button primary block"
-                >
-                  {accionEnProgreso === "crear" ? "Creando..." : "Crear pedido"}
+                <button type="submit" className="button primary block" disabled={creating}>
+                  {creating ? "Creando..." : "Crear pedido"}
                 </button>
               </div>
             </form>
-          </aside>
-
-          <aside className="card map-card">
-            <div className="card__header">
-              <p className="eyebrow">Vista rápida</p>
-              <h2>Mapa Operativo</h2>
-            </div>
-            <div className="map-placeholder">
-              <p>Integración de mapa pendiente</p>
-              <span>Mock visual</span>
-            </div>
           </aside>
         </section>
       </main>

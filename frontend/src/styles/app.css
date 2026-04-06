@@ -328,6 +328,30 @@ body {
   gap: 6px;
 }
 
+.form__row--two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.check-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.check-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.check-input input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
 label {
   font-weight: 700;
   color: #0f172a;
@@ -530,5 +554,9 @@ select:focus {
 
   .is-optional {
     display: none;
+  }
+
+  .form__row--two {
+    grid-template-columns: 1fr;
   }
 }
