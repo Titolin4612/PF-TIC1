@@ -7,6 +7,9 @@ import { sortDriverPedidos } from "../../utils/driverPresentation";
 const normalizeEmail = (value: string | null | undefined): string =>
   value?.trim().toLowerCase() ?? "";
 
+const DRIVER_ACCOUNT_ERROR =
+  "No pudimos identificar tu cuenta para cargar las entregas asignadas.";
+
 export const useDriverPedidos = () => {
   const { session } = useAuth();
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
@@ -28,15 +31,15 @@ export const useDriverPedidos = () => {
       setError(null);
 
       try {
+        if (!driverEmail) {
+          setPedidos([]);
+          setError(DRIVER_ACCOUNT_ERROR);
+          return;
+        }
+
         const data = await obtenerPedidos();
         const assignedPedidos = Array.isArray(data)
-          ? data.filter((pedido) => {
-              if (!driverEmail) {
-                return true;
-              }
-
-              return normalizeEmail(pedido.repartidorEmail) === driverEmail;
-            })
+          ? data.filter((pedido) => normalizeEmail(pedido.repartidorEmail) === driverEmail)
           : [];
 
         setPedidos(sortDriverPedidos(assignedPedidos));

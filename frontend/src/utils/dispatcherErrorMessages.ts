@@ -3,6 +3,7 @@ import { ApiError } from "../api/apiFetch";
 type DispatcherAction =
   | "load"
   | "refresh"
+  | "create"
   | "status"
   | "assign"
   | "delete"
@@ -60,6 +61,26 @@ const getStatusMessage = (error: ApiError): string => {
   return "No fue posible actualizar el pedido. Intentalo de nuevo.";
 };
 
+const getCreateMessage = (error: ApiError): string => {
+  if (error.status === 401) {
+    return "Tu sesion ya no es valida. Inicia sesion de nuevo para crear el pedido.";
+  }
+
+  if (error.status === 403) {
+    return "No tienes permisos para crear pedidos con tu rol actual.";
+  }
+
+  if (error.status === 400 || error.status === 422) {
+    return "Revisa los datos del pedido e intentalo nuevamente.";
+  }
+
+  if (error.status >= 500) {
+    return "No pudimos crear el pedido en este momento. Intentalo nuevamente.";
+  }
+
+  return "No fue posible crear el pedido. Intentalo de nuevo.";
+};
+
 const getAssignMessage = (error: ApiError): string => {
   const backendMessage = getBackendMessage(error);
   const emailKeywords = ["email", "correo", "repartidor", "usuario", "exist"];
@@ -109,6 +130,8 @@ export const getDispatcherErrorMessage = (
       case "refresh":
       case "details":
         return getLoadMessage(error);
+      case "create":
+        return getCreateMessage(error);
       case "status":
         return getStatusMessage(error);
       case "assign":
@@ -119,6 +142,8 @@ export const getDispatcherErrorMessage = (
   }
 
   switch (action) {
+    case "create":
+      return "No fue posible crear el pedido. Intentalo de nuevo.";
     case "status":
       return "No fue posible actualizar el pedido. Intentalo de nuevo.";
     case "assign":

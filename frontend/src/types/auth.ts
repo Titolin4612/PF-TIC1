@@ -18,6 +18,9 @@ export interface RegisterPayload extends LoginPayload {
   rol: UserRole;
 }
 
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === "string" && value.trim().length > 0;
+
 export const isUserRole = (value: unknown): value is UserRole =>
   typeof value === "string" && USER_ROLES.includes(value as UserRole);
 
@@ -29,8 +32,8 @@ export const isAuthSession = (value: unknown): value is AuthSession => {
   const candidate = value as Partial<AuthSession>;
 
   return (
-    typeof candidate.token === "string" &&
-    typeof candidate.email === "string" &&
+    isNonEmptyString(candidate.token) &&
+    isNonEmptyString(candidate.email) &&
     isUserRole(candidate.rol)
   );
 };

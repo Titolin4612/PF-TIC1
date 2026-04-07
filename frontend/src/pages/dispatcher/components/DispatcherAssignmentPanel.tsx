@@ -1,7 +1,9 @@
-import type { ChangeEvent, FormEvent } from "react";
+import { useState, type ChangeEvent, type FormEvent } from "react";
 import { PedidoStatusBadge } from "../../../components/PedidoStatusBadge";
-import type { Pedido } from "../../../types/pedido";
+import type { Pedido, PedidoInput, TipoCobro, TipoTamano } from "../../../types/pedido";
 import {
+  ESTADO_LABELS,
+  ESTADO_OPTIONS,
   TAMANO_LABELS,
   TIPO_COBRO_LABELS,
   formatBoolean,
@@ -12,36 +14,292 @@ import {
   getPriorityLabel,
   getRepartidorLabel,
 } from "../../../utils/pedidoPresentation";
-import { DispatcherEmptyState } from "./DispatcherEmptyState";
+
+const ZONA_OPTIONS = ["Medellin", "Envigado", "Bello", "Itagui"] as const;
+
+interface DispatcherCreateFormState {
+  direccionEntrega: string;
+  estado: PedidoInput["estado"];
+  zona: string;
+  peso: string;
+  tamano: TipoTamano;
+  fragil: boolean;
+  tipoCobro: TipoCobro;
+  prioritario: boolean;
+}
+
+const INITIAL_CREATE_FORM: DispatcherCreateFormState = {
+  direccionEntrega: "",
+  estado: "CREADO",
+  zona: "Medellin",
+  peso: "",
+  tamano: "PEQUENO",
+  fragil: false,
+  tipoCobro: "WEB",
+  prioritario: false,
+};
 
 interface DispatcherAssignmentPanelProps {
+  isCreating: boolean;
+  sticky?: boolean;
   selectedPedido: Pedido | null;
   assignmentEmail: string;
   hasPedidos: boolean;
   hasActiveFilters: boolean;
+  creating: boolean;
   submitting: boolean;
   deleting: boolean;
+  onCreatePedido: (pedido: PedidoInput) => Promise<Pedido | null>;
   onAssignmentEmailChange: (value: string) => void;
   onSubmitAssignment: () => void;
   onDeletePedido: () => void;
   onResetFilters: () => void;
+  onStartCreate: () => void;
 }
 
 export const DispatcherAssignmentPanel = ({
+  isCreating,
+  sticky = true,
   selectedPedido,
   assignmentEmail,
   hasPedidos,
   hasActiveFilters,
+  creating,
   submitting,
   deleting,
+  onCreatePedido,
   onAssignmentEmailChange,
   onSubmitAssignment,
   onDeletePedido,
   onResetFilters,
+  onStartCreate,
 }: DispatcherAssignmentPanelProps) => {
+  const [createForm, setCreateForm] = useState<DispatcherCreateFormState>(INITIAL_CREATE_FORM);
+  const panelClassName = sticky ? "card dispatcher-panel create-card" : "card dispatcher-panel";
+
+  if (isCreating) {
+    const handleCreateSubmit = async (event: FormEvent) => {
+      event.preventDefault();
+
+      const createdPedido = await onCreatePedido({
+        direccionEntrega: createForm.direccionEntrega.trim(),
+        estado: createForm.estado,
+        zona: createForm.zona.trim(),
+        peso: Number(createForm.peso),
+        tamano: createForm.tamano,
+        fragil: createForm.fragil,
+        tipoCobro: createForm.tipoCobro,
+        prioritario: createForm.prioritario,
+      });
+
+      if (createdPedido) {
+        setCreateForm(INITIAL_CREATE_FORM);
+      }
+    };
+
+    return (
+      <article className={panelClassName}>
+        <div className="card__header card__header--split">
+          <div>
+            <p className="eyebrow">Nuevo pedido</p>
+            <h2>Crear pedido</h2>
+          </div>
+          <span className="placeholder-badge">Alta rapida</span>
+        </div>
+
+        <div className="data-note panel-note">
+          <p className="eyebrow">Alta operativa</p>
+          <strong>Registra un pedido nuevo sin salir del centro de control.</strong>
+          <span>
+            Completa direccion, zona, formato y condiciones de entrega para sumarlo al
+            listado del turno.
+          </span>
+        </div>
+
+        <form className="assignment-form" onSubmit={handleCreateSubmit}>
+          <div className="form__row">
+            <label htmlFor="create-direccion">Direccion de entrega</label>
+            <input
+              id="create-direccion"
+              value={createForm.direccionEntrega}
+              onChange={(event) =>
+                setCreateForm((current) => ({
+                  ...current,
+                  direccionEntrega: event.target.value,
+                }))
+              }
+              placeholder="Calle 10 # 20-30"
+              required
+            />
+          </div>
+
+          <div className="form__row">
+            <label htmlFor="create-zona">Zona</label>
+            <select
+              id="create-zona"
+              value={createForm.zona}
+              onChange={(event) =>
+                setCreateForm((current) => ({
+                  ...current,
+                  zona: event.target.value,
+                }))
+              }
+            >
+              {ZONA_OPTIONS.map((zona) => (
+                <option key={zona} value={zona}>
+                  {zona}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form__row">
+            <label htmlFor="create-estado">Estado inicial</label>
+            <select
+              id="create-estado"
+              value={createForm.estado}
+              onChange={(event) =>
+                setCreateForm((current) => ({
+                  ...current,
+                  estado: event.target.value as PedidoInput["estado"],
+                }))
+              }
+            >
+              {ESTADO_OPTIONS.map((estado) => (
+                <option key={estado} value={estado}>
+                  {ESTADO_LABELS[estado]}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form__row">
+            <label htmlFor="create-peso">Peso (kg)</label>
+            <input
+              id="create-peso"
+              type="number"
+              min="0.1"
+              step="0.1"
+              value={createForm.peso}
+              onChange={(event) =>
+                setCreateForm((current) => ({
+                  ...current,
+                  peso: event.target.value,
+                }))
+              }
+              placeholder="5.0"
+              required
+            />
+          </div>
+
+          <div className="form__row">
+            <label htmlFor="create-tamano">Tamano</label>
+            <select
+              id="create-tamano"
+              value={createForm.tamano}
+              onChange={(event) =>
+                setCreateForm((current) => ({
+                  ...current,
+                  tamano: event.target.value as TipoTamano,
+                }))
+              }
+            >
+              {Object.entries(TAMANO_LABELS).map(([tamano, label]) => (
+                <option key={tamano} value={tamano}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form__row">
+            <label htmlFor="create-cobro">Tipo de cobro</label>
+            <select
+              id="create-cobro"
+              value={createForm.tipoCobro}
+              onChange={(event) =>
+                setCreateForm((current) => ({
+                  ...current,
+                  tipoCobro: event.target.value as TipoCobro,
+                }))
+              }
+            >
+              {Object.entries(TIPO_COBRO_LABELS).map(([tipoCobro, label]) => (
+                <option key={tipoCobro} value={tipoCobro}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="dispatcher-toggle-grid">
+            <label
+              className={`dispatcher-toggle${
+                createForm.prioritario ? " dispatcher-toggle--active" : ""
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={createForm.prioritario}
+                onChange={(event) =>
+                  setCreateForm((current) => ({
+                    ...current,
+                    prioritario: event.target.checked,
+                  }))
+                }
+              />
+              <span className="dispatcher-toggle__control" aria-hidden="true" />
+              <span className="dispatcher-toggle__copy">
+                <span className="dispatcher-toggle__title">Prioritario</span>
+                <span className="dispatcher-toggle__meta">
+                  Dale foco primero dentro del turno.
+                </span>
+              </span>
+            </label>
+
+            <label
+              className={`dispatcher-toggle${
+                createForm.fragil ? " dispatcher-toggle--active" : ""
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={createForm.fragil}
+                onChange={(event) =>
+                  setCreateForm((current) => ({
+                    ...current,
+                    fragil: event.target.checked,
+                  }))
+                }
+              />
+              <span className="dispatcher-toggle__control" aria-hidden="true" />
+              <span className="dispatcher-toggle__copy">
+                <span className="dispatcher-toggle__title">Fragil</span>
+                <span className="dispatcher-toggle__meta">
+                  Requiere manejo delicado en reparto.
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <div className="panel-actions">
+            <button type="submit" className="button primary block" disabled={creating}>
+              {creating ? "Creando..." : "Crear pedido"}
+            </button>
+            {hasActiveFilters ? (
+              <button type="button" className="button ghost block" onClick={onResetFilters}>
+                Limpiar filtros
+              </button>
+            ) : null}
+          </div>
+        </form>
+      </article>
+    );
+  }
+
   if (!selectedPedido) {
     return (
-      <article className="card dispatcher-panel create-card">
+      <article className={panelClassName}>
         <div className="card__header">
           <div>
             <p className="eyebrow">Pedido en foco</p>
@@ -49,26 +307,49 @@ export const DispatcherAssignmentPanel = ({
           </div>
         </div>
 
-        {!hasPedidos ? (
-          <DispatcherEmptyState
-            compact
-            title="Sin pedidos en gestion"
-            body="Este panel concentra asignacion por correo, reasignacion y retiro de pedidos del turno."
-          />
-        ) : hasActiveFilters ? (
-          <DispatcherEmptyState
-            compact
-            title="Sin pedido visible en la vista actual"
-            body="Limpia los filtros para recuperar el listado completo y abrir un frente de trabajo."
-            actions={[{ label: "Limpiar filtros", onClick: onResetFilters }]}
-          />
-        ) : (
-          <DispatcherEmptyState
-            compact
-            title="Selecciona una fila del listado"
-            body="La ficha lateral resume cliente, zona, reparto y acciones rapidas para el pedido activo."
-          />
-        )}
+        <div className="data-note panel-note">
+          <p className="eyebrow">Vista lateral</p>
+          <strong>
+            {!hasPedidos
+              ? "Todavia no hay pedidos cargados en este turno."
+              : hasActiveFilters
+                ? "La vista actual no deja un pedido en foco."
+                : "Elige una fila del listado para ver su detalle."}
+          </strong>
+          <span>
+            {!hasPedidos
+              ? "Desde aqui podras asignar reparto, retirar pedidos y seguir el frente operativo apenas exista carga."
+              : hasActiveFilters
+                ? "Puedes limpiar filtros para recuperar visibilidad o crear un pedido nuevo sin salir de gestion."
+                : "Esta ficha resume cliente, zona, reparto actual y acciones rapidas para el pedido seleccionado."}
+          </span>
+        </div>
+
+        <div className="detail-list">
+          <div className="detail-list__item">
+            <span className="detail-list__label">Siguiente paso</span>
+            <span className="detail-list__value">
+              {!hasPedidos ? "Crear el primer pedido del turno" : "Seleccionar o crear un pedido"}
+            </span>
+          </div>
+          <div className="detail-list__item">
+            <span className="detail-list__label">Desde esta ficha</span>
+            <span className="detail-list__value">
+              Asignacion de reparto, retiro del pedido y lectura rapida del frente activo.
+            </span>
+          </div>
+        </div>
+
+        <div className="panel-actions">
+          <button type="button" className="button primary block" onClick={onStartCreate}>
+            Nuevo pedido
+          </button>
+          {hasActiveFilters ? (
+            <button type="button" className="button ghost block" onClick={onResetFilters}>
+              Limpiar filtros
+            </button>
+          ) : null}
+        </div>
       </article>
     );
   }
@@ -89,7 +370,7 @@ export const DispatcherAssignmentPanel = ({
   };
 
   return (
-    <article className="card dispatcher-panel create-card">
+    <article className={panelClassName}>
       <div className="card__header card__header--split">
         <div>
           <p className="eyebrow">Pedido en foco</p>

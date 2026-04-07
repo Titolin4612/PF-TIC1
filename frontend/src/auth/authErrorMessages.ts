@@ -1,4 +1,5 @@
-import { ApiError } from "../api/apiFetch";
+import { InvalidAuthSessionError } from "../api/authApi";
+import { ApiError, ApiNetworkError } from "../api/apiFetch";
 
 type AuthAction = "login" | "register";
 
@@ -29,6 +30,10 @@ const hasAnyKeyword = (value: string, keywords: string[]): boolean =>
 const getFriendlyLoginError = (error: ApiError): string => {
   if (error.status === 401) {
     return "Correo o contrasena incorrectos.";
+  }
+
+  if (error.status === 403) {
+    return "Tu cuenta no tiene permisos para iniciar sesion.";
   }
 
   if (error.status >= 500) {
@@ -77,6 +82,18 @@ export const getAuthErrorMessage = (
     return action === "login"
       ? getFriendlyLoginError(error)
       : getFriendlyRegisterError(error);
+  }
+
+  if (error instanceof ApiNetworkError) {
+    return action === "login"
+      ? "No pudimos conectar con el servidor para iniciar sesion."
+      : "No pudimos conectar con el servidor para completar el registro.";
+  }
+
+  if (error instanceof InvalidAuthSessionError) {
+    return action === "login"
+      ? "El servidor devolvio una respuesta invalida al iniciar sesion."
+      : "El servidor devolvio una respuesta invalida al completar el registro.";
   }
 
   return action === "login"

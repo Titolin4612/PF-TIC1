@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { MetricCard } from "../../components/MetricCard";
+import type { PedidoInput } from "../../api/pedidoApi";
 import {
   getCourierSummaries,
   getPedidoMetrics,
@@ -22,6 +23,7 @@ import { useDispatcherOrders } from "./useDispatcherOrders";
 type AssignmentFilter = "ALL" | "ASSIGNED" | "UNASSIGNED";
 
 export const DispatcherOrdersPage = () => {
+  const createPanelId = "dispatcher-create-panel";
   const {
     pedidos,
     loading,
@@ -29,6 +31,7 @@ export const DispatcherOrdersPage = () => {
     rowAction,
     error,
     refresh,
+    createPedido,
     updateStatus,
     assignCourier,
     removePedido,
@@ -120,6 +123,24 @@ export const DispatcherOrdersPage = () => {
     setAssignmentEmail(pedido?.repartidorEmail ?? "");
   };
 
+  const handleStartCreate = () => {
+    document.getElementById(createPanelId)?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
+
+  const handleCreatePedido = async (pedido: PedidoInput) => {
+    const createdPedido = await createPedido(pedido);
+
+    if (createdPedido) {
+      setSelectedPedidoId(createdPedido.id);
+      setAssignmentEmail(createdPedido.repartidorEmail ?? "");
+    }
+
+    return createdPedido;
+  };
+
   const handleSubmitAssignment = async () => {
     if (!selectedPedido || visibleAssignmentEmail.trim().length === 0) {
       return;
@@ -154,9 +175,18 @@ export const DispatcherOrdersPage = () => {
             </p>
           </div>
 
-          <button type="button" className="button ghost" onClick={() => void refresh()}>
-            {loading || refreshing ? "Actualizando..." : "Refrescar"}
-          </button>
+          <div className="header-actions">
+            <button
+              type="button"
+              className="button primary"
+              onClick={handleStartCreate}
+            >
+              Nuevo pedido
+            </button>
+            <button type="button" className="button ghost" onClick={() => void refresh()}>
+              {loading || refreshing ? "Actualizando..." : "Refrescar"}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -287,16 +317,20 @@ export const DispatcherOrdersPage = () => {
 
         <aside className="side-stack side-stack--sticky">
           <DispatcherAssignmentPanel
+            isCreating={false}
+            sticky
             selectedPedido={selectedPedido}
             assignmentEmail={visibleAssignmentEmail}
             hasPedidos={pedidos.length > 0}
             hasActiveFilters={hasActiveFilters}
+            creating={rowAction === "crear"}
             submitting={
               selectedPedido !== null && rowAction === `asignar-${selectedPedido.id}`
             }
             deleting={
               selectedPedido !== null && rowAction === `eliminar-${selectedPedido.id}`
             }
+            onCreatePedido={(pedido) => handleCreatePedido(pedido)}
             onAssignmentEmailChange={(value) => {
               if (selectedPedido) {
                 setSelectedPedidoId(selectedPedido.id);
@@ -306,8 +340,29 @@ export const DispatcherOrdersPage = () => {
             onSubmitAssignment={() => void handleSubmitAssignment()}
             onDeletePedido={() => void handleDeleteSelected()}
             onResetFilters={handleResetFilters}
+            onStartCreate={handleStartCreate}
           />
         </aside>
+      </section>
+
+      <section id={createPanelId}>
+        <DispatcherAssignmentPanel
+          isCreating
+          sticky={false}
+          selectedPedido={selectedPedido}
+          assignmentEmail={visibleAssignmentEmail}
+          hasPedidos={pedidos.length > 0}
+          hasActiveFilters={hasActiveFilters}
+          creating={rowAction === "crear"}
+          submitting={false}
+          deleting={false}
+          onCreatePedido={(pedido) => handleCreatePedido(pedido)}
+          onAssignmentEmailChange={() => {}}
+          onSubmitAssignment={() => {}}
+          onDeletePedido={() => {}}
+          onResetFilters={handleResetFilters}
+          onStartCreate={handleStartCreate}
+        />
       </section>
 
       <section className="dispatcher-support-grid">

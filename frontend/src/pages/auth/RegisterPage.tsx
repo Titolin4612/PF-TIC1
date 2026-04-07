@@ -4,8 +4,10 @@ import { Link, Navigate, useNavigate } from "react-router-dom";
 import { getAuthErrorMessage } from "../../auth/authErrorMessages";
 import { useAuth } from "../../auth/useAuth";
 import { APP_ROUTES } from "../../router/paths";
-import { USER_ROLES, type UserRole } from "../../types/auth";
+import type { UserRole } from "../../types/auth";
 import { getDefaultRouteByRole, ROLE_LABELS } from "../../utils/roleRedirect";
+
+const PUBLIC_REGISTER_ROLES: UserRole[] = ["CLIENTE"];
 
 export const RegisterPage = () => {
   const navigate = useNavigate();
@@ -87,7 +89,7 @@ export const RegisterPage = () => {
             value={rol}
             onChange={(event) => setRol(event.target.value as UserRole)}
           >
-            {USER_ROLES.map((roleOption) => (
+            {PUBLIC_REGISTER_ROLES.map((roleOption) => (
               <option key={roleOption} value={roleOption}>
                 {ROLE_LABELS[roleOption]}
               </option>

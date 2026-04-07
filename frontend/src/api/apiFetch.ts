@@ -73,6 +73,13 @@ export class ApiError extends Error {
   }
 }
 
+export class ApiNetworkError extends Error {
+  constructor(message = "Network request failed") {
+    super(message);
+    this.name = "ApiNetworkError";
+  }
+}
+
 export const registerUnauthorizedHandler = (
   handler: (() => void) | null
 ): void => {
@@ -93,10 +100,20 @@ export const apiFetch = async <T>(
     }
   }
 
-  const response = await fetch(buildUrl(path), {
-    ...requestInit,
-    headers: requestHeaders,
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(buildUrl(path), {
+      ...requestInit,
+      headers: requestHeaders,
+    });
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new ApiNetworkError(error.message);
+    }
+
+    throw new ApiNetworkError();
+  }
 
   const rawBody = response.status === 204 ? "" : await response.text();
   const contentType = response.headers.get("content-type") ?? "";

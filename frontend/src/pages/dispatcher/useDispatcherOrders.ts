@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import {
   actualizarEstado,
   asignarRepartidor,
+  crearPedido,
   eliminarPedido,
   obtenerPedidos,
   type EstadoPedido,
   type Pedido,
+  type PedidoInput,
 } from "../../api/pedidoApi";
 import { getDispatcherErrorMessage } from "../../utils/dispatcherErrorMessages";
 
@@ -45,6 +47,22 @@ export const useDispatcherOrders = () => {
 
   const refresh = async () => {
     await loadPedidos("refresh");
+  };
+
+  const createNewPedido = async (pedido: PedidoInput) => {
+    setRowAction("crear");
+    setError(null);
+
+    try {
+      const createdPedido = await crearPedido(pedido);
+      setPedidos((currentPedidos) => [createdPedido, ...currentPedidos]);
+      return createdPedido;
+    } catch (requestError) {
+      setError(getDispatcherErrorMessage("create", requestError));
+      return null;
+    } finally {
+      setRowAction(null);
+    }
   };
 
   const updateStatus = async (id: number, estado: EstadoPedido) => {
@@ -109,6 +127,7 @@ export const useDispatcherOrders = () => {
     rowAction,
     error,
     refresh,
+    createPedido: createNewPedido,
     updateStatus,
     assignCourier,
     removePedido,

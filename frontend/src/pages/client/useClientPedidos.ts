@@ -1,22 +1,66 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { obtenerPedidos, type Pedido } from "../../api/pedidoApi";
+import {
+  crearPedido,
+  obtenerPedidos,
+  type Pedido,
+  type PedidoInput,
+} from "../../api/pedidoApi";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../api/apiFetch";
 
 const normalizeEmail = (value: string | null | undefined): string =>
   value?.trim().toLowerCase() ?? "";
 
-const getClientErrorMessage = (error: unknown, action: "load" | "refresh"): string => {
+const CLIENT_ACCOUNT_ERROR = "No pudimos identificar tu cuenta para cargar tus pedidos.";
+
+const sortPedidosByNewest = (pedidos: Pedido[]): Pedido[] =>
+  [...pedidos].sort((left, right) => {
+    const leftDate = Date.parse(left.fechaCreacion);
+    const rightDate = Date.parse(right.fechaCreacion);
+
+    if (Number.isNaN(leftDate) || Number.isNaN(rightDate)) {
+      return right.id - left.id;
+    }
+
+    return rightDate - leftDate;
+  });
+
+const getClientErrorMessage = (
+  error: unknown,
+  action: "load" | "refresh" | "create"
+): string => {
   if (error instanceof ApiError) {
+    if (error.status === 401) {
+      return action === "create"
+        ? "Tu sesion ya no es valida. Inicia sesion de nuevo para solicitar el pedido."
+        : "Tu sesion ya no es valida. Inicia sesion de nuevo para ver tus pedidos.";
+    }
+
     if (error.status === 403) {
-      return "No tienes acceso a tus pedidos.";
+      return action === "create"
+        ? "No tienes permisos para solicitar pedidos."
+        : "No tienes acceso a tus pedidos.";
+    }
+
+    if (error.status === 400 || error.status === 422) {
+      return action === "create"
+        ? "Revisa los datos del pedido e intentalo nuevamente."
+        : "No fue posible procesar tus pedidos con los datos actuales.";
     }
 
     if (error.status >= 500) {
+      if (action === "create") {
+        return "No pudimos registrar tu pedido en este momento.";
+      }
+
       return action === "load"
         ? "No pudimos cargar tus pedidos en este momento."
         : "No pudimos actualizar tus pedidos en este momento.";
     }
+  }
+
+  if (action === "create") {
+    return "No fue posible registrar tu pedido.";
   }
 
   return action === "load"
@@ -29,6 +73,7 @@ export const useClientPedidos = () => {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const clientEmail = useMemo(() => normalizeEmail(session?.email), [session?.email]);
@@ -44,21 +89,18 @@ export const useClientPedidos = () => {
       setError(null);
 
       try {
+        if (!clientEmail) {
+          setPedidos([]);
+          setError(CLIENT_ACCOUNT_ERROR);
+          return;
+        }
+
         const data = await obtenerPedidos();
 
         const ownPedidos = Array.isArray(data)
-          ? data
-              .filter((pedido) => normalizeEmail(pedido.clienteEmail) === clientEmail)
-              .sort((left, right) => {
-                const leftDate = Date.parse(left.fechaCreacion);
-                const rightDate = Date.parse(right.fechaCreacion);
-
-                if (Number.isNaN(leftDate) || Number.isNaN(rightDate)) {
-                  return right.id - left.id;
-                }
-
-                return rightDate - leftDate;
-              })
+          ? sortPedidosByNewest(
+              data.filter((pedido) => normalizeEmail(pedido.clienteEmail) === clientEmail)
+            )
           : [];
 
         setPedidos(ownPedidos);
@@ -90,11 +132,35 @@ export const useClientPedidos = () => {
     await loadPedidos("refresh");
   };
 
+  const createNewPedido = async (pedido: PedidoInput) => {
+    setCreating(true);
+    setError(null);
+
+    try {
+      if (!clientEmail) {
+        setPedidos([]);
+        setError(CLIENT_ACCOUNT_ERROR);
+        return null;
+      }
+
+      const createdPedido = await crearPedido(pedido);
+      setPedidos((currentPedidos) => sortPedidosByNewest([createdPedido, ...currentPedidos]));
+      return createdPedido;
+    } catch (requestError) {
+      setError(getClientErrorMessage(requestError, "create"));
+      return null;
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return {
     pedidos,
     loading,
     refreshing,
+    creating,
     error,
     refresh,
+    createPedido: createNewPedido,
   };
 };

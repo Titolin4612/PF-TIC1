@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { MetricCard } from "../../components/MetricCard";
 import { PedidoStatusBadge } from "../../components/PedidoStatusBadge";
 import { useClientPedidos } from "./useClientPedidos";
+import type { PedidoInput, TipoCobro, TipoTamano } from "../../types/pedido";
 import {
   CLIENT_STATUS_FLOW,
   getClientHeadline,
@@ -10,11 +11,41 @@ import {
   getClientSecondaryNote,
   getClientSupportCopy,
 } from "../../utils/clientPresentation";
-import { ESTADO_LABELS, formatZona } from "../../utils/pedidoPresentation";
+import {
+  ESTADO_LABELS,
+  TAMANO_LABELS,
+  TIPO_COBRO_LABELS,
+  formatZona,
+} from "../../utils/pedidoPresentation";
+
+const ZONA_OPTIONS = ["Medellin", "Envigado", "Bello", "Itagui"] as const;
+
+interface ClientCreateFormState {
+  direccionEntrega: string;
+  zona: string;
+  peso: string;
+  tamano: TipoTamano;
+  fragil: boolean;
+  tipoCobro: TipoCobro;
+  prioritario: boolean;
+}
+
+const INITIAL_CREATE_FORM: ClientCreateFormState = {
+  direccionEntrega: "",
+  zona: "Medellin",
+  peso: "",
+  tamano: "PEQUENO",
+  fragil: false,
+  tipoCobro: "WEB",
+  prioritario: false,
+};
 
 export const ClientOrdersPage = () => {
-  const { pedidos, loading, refreshing, error, refresh } = useClientPedidos();
+  const createPanelId = "client-create-panel";
+  const { pedidos, loading, refreshing, creating, error, refresh, createPedido } =
+    useClientPedidos();
   const [selectedPedidoId, setSelectedPedidoId] = useState<number | null>(null);
+  const [createForm, setCreateForm] = useState<ClientCreateFormState>(INITIAL_CREATE_FORM);
 
   const selectedPedido = useMemo(() => {
     return (
@@ -34,6 +65,33 @@ export const ClientOrdersPage = () => {
     entregados: pedidos.filter((pedido) => pedido.estado === "ENTREGADO").length,
   };
 
+  const handleCreateSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+
+    const createdPedido = await createPedido({
+      direccionEntrega: createForm.direccionEntrega.trim(),
+      estado: "CREADO",
+      zona: createForm.zona.trim(),
+      peso: Number(createForm.peso),
+      tamano: createForm.tamano,
+      fragil: createForm.fragil,
+      tipoCobro: createForm.tipoCobro,
+      prioritario: createForm.prioritario,
+    } satisfies PedidoInput);
+
+    if (createdPedido) {
+      setCreateForm(INITIAL_CREATE_FORM);
+      setSelectedPedidoId(createdPedido.id);
+    }
+  };
+
+  const handleStartCreate = () => {
+    document.getElementById(createPanelId)?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
+
   return (
     <section className="page-stack">
       <header className="card page-hero">
@@ -48,6 +106,7 @@ export const ClientOrdersPage = () => {
           </div>
 
           <div className="header-actions">
+            <span className="placeholder-badge">Solicitud activa</span>
             <button type="button" className="button ghost" onClick={() => void refresh()}>
               {loading || refreshing ? "Actualizando..." : "Actualizar pedidos"}
             </button>
@@ -64,7 +123,7 @@ export const ClientOrdersPage = () => {
         <MetricCard label="Entregados" value={metrics.entregados} tone="success" />
       </section>
 
-      <section className="orders-grid">
+      <section className="orders-grid orders-grid--client">
         <article className="card order-card">
           <div className="card__header card__header--split">
             <div>
@@ -81,13 +140,29 @@ export const ClientOrdersPage = () => {
               <div className="skeleton-row" />
             </div>
           ) : !selectedPedido ? (
-            <div className="driver-empty">
+            <div className="driver-empty client-empty-state">
               <p className="driver-empty__eyebrow">Sin actividad</p>
               <h3 className="driver-empty__title">Aun no tienes pedidos registrados</h3>
               <p className="driver-empty__body">
                 Cuando existan pedidos asociados a tu cuenta, aqui veras el estado,
                 el progreso y el detalle principal de cada uno.
               </p>
+              <div className="data-note">
+                <p className="eyebrow">Primer paso</p>
+                <strong>Solicita tu primer pedido desde este mismo panel.</strong>
+                <span>
+                  Cuando lo registres, aparecera aqui como pedido destacado y tambien
+                  en tu listado lateral para seguir su avance.
+                </span>
+              </div>
+              <div className="panel-actions client-empty-state__actions">
+                <button type="button" className="button primary" onClick={handleStartCreate}>
+                  Solicitar pedido
+                </button>
+                <button type="button" className="button ghost" onClick={() => void refresh()}>
+                  Actualizar pedidos
+                </button>
+              </div>
             </div>
           ) : (
             <div className="driver-focus__body">
@@ -146,8 +221,8 @@ export const ClientOrdersPage = () => {
           )}
         </article>
 
-        <aside className="side-stack">
-          <article className="card">
+        <aside className="side-stack client-orders-side">
+          <article className="card client-orders-list">
             <div className="card__header card__header--split">
               <div>
                 <p className="eyebrow">Listado</p>
@@ -163,11 +238,16 @@ export const ClientOrdersPage = () => {
                 <div className="skeleton-row" />
               </div>
             ) : pedidos.length === 0 ? (
-              <div className="driver-empty driver-empty--compact">
+              <div className="driver-empty driver-empty--compact client-orders-list__empty">
+                <p className="driver-empty__eyebrow">Listado vacio</p>
+                <h3 className="driver-empty__title">Aun no hay pedidos por mostrar</h3>
                 <p className="driver-empty__body">
                   Esta bandeja mostrara tus pedidos del mas reciente al mas relevante
                   para que puedas revisar su progreso sin salir de tu panel.
                 </p>
+                <button type="button" className="button ghost" onClick={handleStartCreate}>
+                  Ir a solicitar pedido
+                </button>
               </div>
             ) : (
               <div className="summary-list">
@@ -199,6 +279,188 @@ export const ClientOrdersPage = () => {
             )}
           </article>
         </aside>
+      </section>
+
+      <section id={createPanelId} className="card">
+        <div className="card__header card__header--split">
+          <div>
+            <p className="eyebrow">Nuevo servicio</p>
+            <h2>Solicitar pedido</h2>
+          </div>
+          <span className="placeholder-badge">Canal cliente</span>
+        </div>
+
+        <div className="data-note">
+          <p className="eyebrow">Registro</p>
+          <strong>Pide un nuevo servicio sin salir de tu panel.</strong>
+          <span>
+            Registra la direccion, la zona y las condiciones de entrega. Tu pedido
+            quedara asociado automaticamente a tu cuenta.
+          </span>
+        </div>
+
+        <form className="assignment-form" onSubmit={handleCreateSubmit}>
+          <div className="form__row">
+            <label htmlFor="client-create-direccion">Direccion de entrega</label>
+            <input
+              id="client-create-direccion"
+              value={createForm.direccionEntrega}
+              onChange={(event) =>
+                setCreateForm((current) => ({
+                  ...current,
+                  direccionEntrega: event.target.value,
+                }))
+              }
+              placeholder="Calle 10 # 20-30"
+              required
+            />
+          </div>
+
+          <div className="form__row--two">
+            <div className="form__row">
+              <label htmlFor="client-create-zona">Zona</label>
+              <select
+                id="client-create-zona"
+                value={createForm.zona}
+                onChange={(event) =>
+                  setCreateForm((current) => ({
+                    ...current,
+                    zona: event.target.value,
+                  }))
+                }
+              >
+                {ZONA_OPTIONS.map((zona) => (
+                  <option key={zona} value={zona}>
+                    {zona}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form__row">
+              <label htmlFor="client-create-peso">Peso (kg)</label>
+              <input
+                id="client-create-peso"
+                type="number"
+                min="0.1"
+                step="0.1"
+                value={createForm.peso}
+                onChange={(event) =>
+                  setCreateForm((current) => ({
+                    ...current,
+                    peso: event.target.value,
+                  }))
+                }
+                placeholder="5.0"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="form__row--two">
+            <div className="form__row">
+              <label htmlFor="client-create-tamano">Tamano</label>
+              <select
+                id="client-create-tamano"
+                value={createForm.tamano}
+                onChange={(event) =>
+                  setCreateForm((current) => ({
+                    ...current,
+                    tamano: event.target.value as TipoTamano,
+                  }))
+                }
+              >
+                {Object.entries(TAMANO_LABELS).map(([tamano, label]) => (
+                  <option key={tamano} value={tamano}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form__row">
+              <label htmlFor="client-create-cobro">Tipo de cobro</label>
+              <select
+                id="client-create-cobro"
+                value={createForm.tipoCobro}
+                onChange={(event) =>
+                  setCreateForm((current) => ({
+                    ...current,
+                    tipoCobro: event.target.value as TipoCobro,
+                  }))
+                }
+              >
+                {Object.entries(TIPO_COBRO_LABELS).map(([tipoCobro, label]) => (
+                  <option key={tipoCobro} value={tipoCobro}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="data-note">
+            <p className="eyebrow">Estado inicial</p>
+            <strong>{ESTADO_LABELS.CREADO}</strong>
+            <span>El pedido se registra en estado creado y luego sigue el flujo operativo.</span>
+          </div>
+
+          <div className="dispatcher-toggle-grid">
+            <label
+              className={`dispatcher-toggle${
+                createForm.prioritario ? " dispatcher-toggle--active" : ""
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={createForm.prioritario}
+                onChange={(event) =>
+                  setCreateForm((current) => ({
+                    ...current,
+                    prioritario: event.target.checked,
+                  }))
+                }
+              />
+              <span className="dispatcher-toggle__control" aria-hidden="true" />
+              <span className="dispatcher-toggle__copy">
+                <span className="dispatcher-toggle__title">Prioritario</span>
+                <span className="dispatcher-toggle__meta">
+                  Indica que este pedido necesita atencion preferente.
+                </span>
+              </span>
+            </label>
+
+            <label
+              className={`dispatcher-toggle${
+                createForm.fragil ? " dispatcher-toggle--active" : ""
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={createForm.fragil}
+                onChange={(event) =>
+                  setCreateForm((current) => ({
+                    ...current,
+                    fragil: event.target.checked,
+                  }))
+                }
+              />
+              <span className="dispatcher-toggle__control" aria-hidden="true" />
+              <span className="dispatcher-toggle__copy">
+                <span className="dispatcher-toggle__title">Fragil</span>
+                <span className="dispatcher-toggle__meta">
+                  Marca el pedido si requiere manejo delicado en la entrega.
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <div className="panel-actions">
+            <button type="submit" className="button primary block" disabled={creating}>
+              {creating ? "Registrando..." : "Solicitar pedido"}
+            </button>
+          </div>
+        </form>
       </section>
     </section>
   );
