@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { PedidoStatusBadge } from "../../components/PedidoStatusBadge";
 import { RouteMap } from "../../components/RouteMap";
@@ -63,7 +63,8 @@ export const DriverRoutePage = () => {
   const visibleFeedback =
     selectedPedido && feedback?.pedidoId === selectedPedido.id ? feedback.message : null;
 
-  const { stops, geocoding } = useGeocodedPedidos(pedidos);
+  const pedidosMemo = useMemo(() => pedidos, [pedidos]);
+  const { stops, geocoding } = useGeocodedPedidos(pedidosMemo);
   const optimizedStops = stops.length > 1 ? nearestNeighborTSP(stops) : stops;
   const activeStopId = selectedPedido
     ? stops.find((s) => s.id === selectedPedido.id)?.id

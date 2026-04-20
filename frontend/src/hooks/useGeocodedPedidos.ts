@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Pedido } from "../types/pedido";
 import { geocodeMany } from "../utils/geocoding";
 import type { GeoStop } from "../utils/tsp";
@@ -17,9 +17,16 @@ export function useGeocodedPedidos(pedidos: Pedido[]): GeocodingState {
   const [total, setTotal] = useState(0);
   const abortRef = useRef(false);
 
+  // Use a stable key based on IDs so the effect only re-runs when pedidos actually change
+  const pedidoKey = useMemo(
+    () => pedidos.map((p) => p.id).sort().join(","),
+    [pedidos]
+  );
+
   const run = useCallback(async (list: Pedido[]) => {
     if (!list.length) {
       setStops([]);
+      setGeocoding(false);
       return;
     }
 
@@ -59,7 +66,9 @@ export function useGeocodedPedidos(pedidos: Pedido[]): GeocodingState {
     return () => {
       abortRef.current = true;
     };
-  }, [pedidos, run]);
+    // pedidoKey guarantees stable identity — avoids infinite re-runs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pedidoKey, run]);
 
   return { stops, geocoding, progress, total };
 }

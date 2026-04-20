@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { MetricCard } from "../../components/MetricCard";
 import { PedidoStatusBadge } from "../../components/PedidoStatusBadge";
@@ -26,8 +26,9 @@ import { useDispatcherOrders } from "./useDispatcherOrders";
 export const DispatcherRoutesPage = () => {
   const { pedidos, loading, refreshing, error, refresh } = useDispatcherOrders();
   const [optimizedRoute, setOptimizedRoute] = useState<GeoStop[] | null>(null);
-  const activePedidos = pedidos.filter(
-    (pedido) => pedido.estado !== "ENTREGADO" && pedido.estado !== "CANCELADO"
+  const activePedidos = useMemo(
+    () => pedidos.filter((p) => p.estado !== "ENTREGADO" && p.estado !== "CANCELADO"),
+    [pedidos]
   );
   const metrics = getPedidoMetrics(activePedidos);
   const courierSummaries = getCourierSummaries(activePedidos);
