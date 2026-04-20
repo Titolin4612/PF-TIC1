@@ -89,7 +89,6 @@ export function RouteMap({
 
   return (
     <MapContainer
-      key={stops.map((s) => s.id).join("-")}
       center={center}
       zoom={13}
       style={{ height, width: "100%", borderRadius: "0.75rem" }}
