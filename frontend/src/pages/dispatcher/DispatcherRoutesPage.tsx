@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { MetricCard } from "../../components/MetricCard";
 import { PedidoStatusBadge } from "../../components/PedidoStatusBadge";
+import { RouteMap } from "../../components/RouteMap";
+import { useGeocodedPedidos } from "../../hooks/useGeocodedPedidos";
 import { APP_ROUTES } from "../../router/paths";
 import {
   getCourierSummaries,
@@ -16,11 +19,13 @@ import {
   getDispatcherActionLabel,
   getPriorityLabel,
 } from "../../utils/pedidoPresentation";
+import { nearestNeighborTSP, totalDistanceKm, type GeoStop } from "../../utils/tsp";
 import { DispatcherEmptyState } from "./components/DispatcherEmptyState";
 import { useDispatcherOrders } from "./useDispatcherOrders";
 
 export const DispatcherRoutesPage = () => {
   const { pedidos, loading, refreshing, error, refresh } = useDispatcherOrders();
+  const [optimizedRoute, setOptimizedRoute] = useState<GeoStop[] | null>(null);
   const activePedidos = pedidos.filter(
     (pedido) => pedido.estado !== "ENTREGADO" && pedido.estado !== "CANCELADO"
   );
@@ -34,6 +39,14 @@ export const DispatcherRoutesPage = () => {
   const activeCourierCount = courierRows.length;
   const topZones = zoneSummaries.slice(0, 6);
   const waitingForAssignment = allUnassignedPedidos.length;
+
+  const { stops, geocoding, progress, total } = useGeocodedPedidos(activePedidos);
+  const routeDistance = optimizedRoute ? totalDistanceKm(optimizedRoute) : null;
+
+  const handleOptimize = () => {
+    if (!stops.length) return;
+    setOptimizedRoute(nearestNeighborTSP(stops));
+  };
   const zonesWithBacklog = zoneSummaries.filter((summary) => summary.pendientes > 0).length;
   const topZone = topZones[0];
   const topCourier = courierRows[0];
@@ -107,6 +120,91 @@ export const DispatcherRoutesPage = () => {
           helper="Atenciones que merecen foco"
         />
       </section>
+
+      <article className="card">
+        <div className="card__header card__header--split">
+          <div>
+            <p className="eyebrow">Optimizacion de rutas · TSP</p>
+            <h2>Mapa operativo</h2>
+          </div>
+          <div className="header-actions">
+            {geocoding && (
+              <span className="geocoding-status">
+                Geocodificando {Math.round(progress * 100)}% ({Math.round(progress * total)}/{total})
+              </span>
+            )}
+            <button
+              type="button"
+              className="button primary"
+              disabled={geocoding || stops.length === 0}
+              onClick={handleOptimize}
+            >
+              {geocoding ? "Cargando mapa..." : "Calcular ruta optima"}
+            </button>
+            {optimizedRoute && (
+              <button
+                type="button"
+                className="button ghost"
+                onClick={() => setOptimizedRoute(null)}
+              >
+                Limpiar ruta
+              </button>
+            )}
+          </div>
+        </div>
+
+        {loading && !stops.length ? (
+          <div className="map-loading">
+            <div className="skeleton-row" style={{ height: "400px" }} />
+          </div>
+        ) : activePedidos.length === 0 ? (
+          <DispatcherEmptyState
+            title="Sin pedidos activos para mapear"
+            body="Cuando haya pedidos en curso apareceran aqui como marcadores y podras calcular la ruta optima."
+          />
+        ) : (
+          <>
+            <RouteMap
+              stops={stops}
+              route={optimizedRoute ?? undefined}
+              height="440px"
+            />
+
+            {optimizedRoute && (
+              <div className="route-result">
+                <div className="route-result__summary">
+                  <span className="eyebrow">Ruta optimizada · vecino mas cercano</span>
+                  <strong>{optimizedRoute.length} paradas · {routeDistance} km estimados</strong>
+                </div>
+                <ol className="route-result__list">
+                  {optimizedRoute.map((stop, i) => (
+                    <li key={stop.id} className="route-result__item">
+                      <span className="route-plan__rank">{i + 1}</span>
+                      <div>
+                        <p className="summary-list__title">
+                          {stop.label}
+                          {stop.prioritario ? <span className="priority-chip"> ⚡ Prioritario</span> : null}
+                        </p>
+                        <p className="summary-list__meta">{stop.subLabel}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
+            {!optimizedRoute && stops.length > 0 && (
+              <p className="map-hint">
+                {stops.length} de {activePedidos.length} pedidos geocodificados.
+                {activePedidos.length > stops.length
+                  ? ` (${activePedidos.length - stops.length} sin coordenadas)`
+                  : ""}
+                {" "}Presiona "Calcular ruta optima" para ordenar las paradas por el algoritmo del viajero.
+              </p>
+            )}
+          </>
+        )}
+      </article>
 
       <section className="routes-top-grid">
         <article className="card order-card">
