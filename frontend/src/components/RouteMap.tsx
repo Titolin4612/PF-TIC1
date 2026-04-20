@@ -1,4 +1,7 @@
 import L from "leaflet";
+import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
+import markerIcon from "leaflet/dist/images/marker-icon.png";
+import markerShadow from "leaflet/dist/images/marker-shadow.png";
 import { useEffect, useRef } from "react";
 import {
   MapContainer,
@@ -13,33 +16,25 @@ import type { GeoStop } from "../utils/tsp";
 // Fix Leaflet default icon paths broken by Vite bundling
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl: new URL(
-    "leaflet/dist/images/marker-icon-2x.png",
-    import.meta.url
-  ).href,
-  iconUrl: new URL(
-    "leaflet/dist/images/marker-icon.png",
-    import.meta.url
-  ).href,
-  shadowUrl: new URL(
-    "leaflet/dist/images/marker-shadow.png",
-    import.meta.url
-  ).href,
+  iconUrl: markerIcon,
+  iconRetinaUrl: markerIcon2x,
+  shadowUrl: markerShadow,
+});
+
+const activeIcon = new L.Icon({
+  iconUrl: markerIcon,
+  iconRetinaUrl: markerIcon2x,
+  shadowUrl: markerShadow,
+  iconSize: [30, 46],
+  iconAnchor: [15, 46],
+  popupAnchor: [1, -38],
+  className: "marker-active",
 });
 
 const priorityIcon = new L.Icon({
-  iconUrl: new URL(
-    "leaflet/dist/images/marker-icon.png",
-    import.meta.url
-  ).href,
-  iconRetinaUrl: new URL(
-    "leaflet/dist/images/marker-icon-2x.png",
-    import.meta.url
-  ).href,
-  shadowUrl: new URL(
-    "leaflet/dist/images/marker-shadow.png",
-    import.meta.url
-  ).href,
+  iconUrl: markerIcon,
+  iconRetinaUrl: markerIcon2x,
+  shadowUrl: markerShadow,
   iconSize: [25, 41],
   iconAnchor: [12, 41],
   popupAnchor: [1, -34],
@@ -66,6 +61,14 @@ function FitBounds({ stops }: { stops: GeoStop[] }) {
   return null;
 }
 
+function wazeUrl(lat: number, lng: number): string {
+  return `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
+}
+
+function googleMapsUrl(lat: number, lng: number): string {
+  return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+}
+
 interface RouteMapProps {
   stops: GeoStop[];
   route?: GeoStop[];
@@ -86,6 +89,7 @@ export function RouteMap({
 
   return (
     <MapContainer
+      key={stops.map((s) => s.id).join("-")}
       center={center}
       zoom={13}
       style={{ height, width: "100%", borderRadius: "0.75rem" }}
@@ -107,24 +111,40 @@ export function RouteMap({
 
       {stops.map((stop, index) => {
         const isActive = stop.id === activeStopId;
-        const icon = stop.prioritario ? priorityIcon : undefined;
+        const icon = isActive ? activeIcon : stop.prioritario ? priorityIcon : undefined;
+        const stopNumber = route
+          ? route.findIndex((s) => s.id === stop.id) + 1
+          : index + 1;
 
         return (
-          <Marker
-            key={stop.id}
-            position={[stop.lat, stop.lng]}
-            icon={isActive ? priorityIcon : icon}
-          >
+          <Marker key={stop.id} position={[stop.lat, stop.lng]} icon={icon}>
             <Popup>
               <div className="map-popup">
                 <strong className="map-popup__title">
-                  {route ? `Parada ${route.findIndex((s) => s.id === stop.id) + 1}` : `#${index + 1}`}
-                  {stop.prioritario ? " ⚡" : ""}
+                  Parada {stopNumber}{stop.prioritario ? " ⚡" : ""}
                 </strong>
                 <p className="map-popup__address">{stop.label}</p>
                 {stop.subLabel && (
                   <p className="map-popup__meta">{stop.subLabel}</p>
                 )}
+                <div className="map-popup__nav">
+                  <a
+                    href={wazeUrl(stop.lat, stop.lng)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="map-popup__nav-btn map-popup__nav-btn--waze"
+                  >
+                    Waze
+                  </a>
+                  <a
+                    href={googleMapsUrl(stop.lat, stop.lng)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="map-popup__nav-btn map-popup__nav-btn--gmaps"
+                  >
+                    Google Maps
+                  </a>
+                </div>
               </div>
             </Popup>
           </Marker>

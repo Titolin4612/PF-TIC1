@@ -2079,3 +2079,40 @@ select:focus {
 .marker-priority {
   filter: hue-rotate(200deg) saturate(2);
 }
+
+/* Active stop marker (bigger) */
+.marker-active {
+  filter: hue-rotate(120deg) saturate(2) brightness(1.1);
+}
+
+/* Popup nav buttons (Waze / Google Maps) */
+.map-popup__nav {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.map-popup__nav-btn {
+  flex: 1;
+  text-align: center;
+  padding: 0.3rem 0.5rem;
+  border-radius: 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+
+.map-popup__nav-btn:hover {
+  opacity: 0.85;
+}
+
+.map-popup__nav-btn--waze {
+  background: #05c8f7;
+  color: #000;
+}
+
+.map-popup__nav-btn--gmaps {
+  background: #4285f4;
+  color: #fff;
+}
