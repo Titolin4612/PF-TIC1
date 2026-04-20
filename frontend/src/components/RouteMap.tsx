@@ -80,7 +80,7 @@ export function RouteMap({
   height = "400px",
 }: RouteMapProps) {
   const center: [number, number] =
-    stops.length > 0 ? [stops[0].lat, stops[0].lng] : [4.711, -74.0721];
+    stops.length > 0 ? [stops[0].lat, stops[0].lng] : [6.2442, -75.5812];
 
   const routeLine = route ?? stops;
 
