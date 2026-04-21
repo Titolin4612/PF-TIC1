@@ -1,10 +1,15 @@
 package com.example.backend.service;
 
-import org.springframework.stereotype.Service;
-import java.util.List;
-import java.util.Set;
 import java.util.Locale;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Service;
+
+import com.example.backend.entity.EstadoPago;
 import com.example.backend.entity.EstadoPedido;
 import com.example.backend.entity.Pedido;
 import com.example.backend.entity.TipoTamano;
@@ -18,8 +23,19 @@ public class PedidoService {
             "medellin",
             "envigado",
             "bello",
-            "itagui"
+            "itagui",
+            "sabaneta"
     );
+
+    private static final Map<String, Double> COSTO_BASE_POR_ZONA = Map.of(
+            "medellin", 13000.0,
+            "itagui", 15000.0,
+            "envigado", 18000.0,
+            "bello", 23000.0,
+            "sabaneta", 25000.0
+    );
+
+    private static final double RECARGO_PRIORITARIO = 10000.0;
 
     private final PedidoRepository pedidoRepository;
 
@@ -28,13 +44,23 @@ public class PedidoService {
     }
 
     public Pedido crearPedido(Pedido pedido) {
-        validarPedido(pedido);
+        validarPedidoYPrepararCosto(pedido);
+        pedido.setEstadoPago(EstadoPago.PENDIENTE);
         return pedidoRepository.save(pedido);
     }
 
     public Pedido crearPedidoComoCliente(Pedido pedido, String clienteEmail) {
-        pedido.setClienteEmail(clienteEmail);
-        validarPedido(pedido);
+        pedido.setClienteEmail(normalizarEmail(clienteEmail));
+        validarPedidoYPrepararCosto(pedido);
+        pedido.setEstadoPago(EstadoPago.PENDIENTE);
+        return pedidoRepository.save(pedido);
+    }
+
+    public Pedido crearPedidoPagadoDesdeStripe(Pedido pedido, String clienteEmail, String stripeSessionId) {
+        pedido.setClienteEmail(normalizarEmail(clienteEmail));
+        validarPedidoYPrepararCosto(pedido);
+        pedido.setEstadoPago(EstadoPago.PAGADO);
+        pedido.setStripeSessionId(stripeSessionId);
         return pedidoRepository.save(pedido);
     }
 
@@ -43,7 +69,15 @@ public class PedidoService {
     }
 
     public List<Pedido> listarPedidosCliente(String clienteEmail) {
-        return pedidoRepository.findByClienteEmail(clienteEmail);
+        return pedidoRepository.findByClienteEmailOrClienteEmailIsNull(normalizarEmail(clienteEmail));
+    }
+
+    public List<Pedido> listarPedidosClienteAutenticado() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null || authentication.getName().isBlank()) {
+            throw new IllegalArgumentException("No hay usuario autenticado para listar pedidos");
+        }
+        return pedidoRepository.findByClienteEmailOrClienteEmailIsNull(normalizarEmail(authentication.getName()));
     }
 
     public List<Pedido> listarPedidosRepartidor(String repartidorEmail) {
@@ -64,7 +98,7 @@ public class PedidoService {
         Pedido pedido = pedidoRepository.findById(id)
                 .orElseThrow(() -> new PedidoNoEncontradoException("Pedido no encontrado"));
 
-        validarPedido(pedidoActualizado);
+        validarPedidoYPrepararCosto(pedidoActualizado);
 
         pedido.setDireccionEntrega(pedidoActualizado.getDireccionEntrega());
         pedido.setEstado(pedidoActualizado.getEstado());
@@ -74,7 +108,11 @@ public class PedidoService {
         pedido.setFragil(pedidoActualizado.getFragil());
         pedido.setTipoCobro(pedidoActualizado.getTipoCobro());
         pedido.setPrioritario(pedidoActualizado.getPrioritario());
+        pedido.setCostoDomicilio(pedidoActualizado.getCostoDomicilio());
         pedido.setRepartidorEmail(pedidoActualizado.getRepartidorEmail());
+        if (pedido.getEstadoPago() == null) {
+            pedido.setEstadoPago(EstadoPago.PENDIENTE);
+        }
 
         return pedidoRepository.save(pedido);
     }
@@ -95,11 +133,12 @@ public class PedidoService {
         return pedidoRepository.findByEstado(estado);
     }
 
-    private void validarPedido(Pedido pedido) {
+    private void validarPedidoYPrepararCosto(Pedido pedido) {
         validarZona(pedido.getZona());
         validarPeso(pedido.getPeso());
         validarTamanoVsPeso(pedido.getTamano(), pedido.getPeso());
         validarTipoCobro(pedido);
+        pedido.setCostoDomicilio(calcularCostoDomicilio(pedido.getZona(), pedido.getPrioritario()));
     }
 
     private void validarZona(String zona) {
@@ -110,7 +149,7 @@ public class PedidoService {
         String zonaNormalizada = zona.trim().toLowerCase(Locale.ROOT);
         if (!ZONAS_AREA_METROPOLITANA.contains(zonaNormalizada)) {
             throw new IllegalArgumentException(
-                    "La zona debe pertenecer al area metropolitana: Medellin, Envigado, Bello, Itagui");
+                    "Zona invalida. Zonas permitidas: medellin, itagui, envigado, bello, sabaneta");
         }
     }
 
@@ -155,6 +194,21 @@ public class PedidoService {
             throw new IllegalArgumentException("El tipo de cobro no puede ser null");
         }
     }
+
+    private double calcularCostoDomicilio(String zona, Boolean prioritario) {
+        validarZona(zona);
+        String zonaNormalizada = zona.trim().toLowerCase(Locale.ROOT);
+        Double costoBase = COSTO_BASE_POR_ZONA.get(zonaNormalizada);
+        if (costoBase == null) {
+            throw new IllegalArgumentException("Zona invalida. No se puede calcular costo de domicilio");
+        }
+        return Boolean.TRUE.equals(prioritario) ? costoBase + RECARGO_PRIORITARIO : costoBase;
+    }
+
+    private String normalizarEmail(String email) {
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("El email del cliente es obligatorio");
+        }
+        return email.trim().toLowerCase(Locale.ROOT);
+    }
 }
-
-

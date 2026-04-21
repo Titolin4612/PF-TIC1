@@ -3,6 +3,7 @@ import { clearStoredSession, loadStoredSession } from "../auth/authStorage";
 type ApiFetchOptions = RequestInit & {
   auth?: boolean;
   parseAs?: "json" | "text" | "void";
+  skipAuthResetOn401?: boolean;
 };
 
 type BackendErrorPayload = {
@@ -15,6 +16,7 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:808
   /\/$/,
   ""
 );
+const TOKEN_STORAGE_KEY = "token";
 
 let unauthorizedHandler: (() => void) | null = null;
 
@@ -90,13 +92,24 @@ export const apiFetch = async <T>(
   path: string,
   options: ApiFetchOptions = {}
 ): Promise<T> => {
-  const { auth = false, parseAs = "json", headers, ...requestInit } = options;
+  const {
+    auth = false,
+    parseAs = "json",
+    skipAuthResetOn401 = false,
+    headers,
+    ...requestInit
+  } = options;
   const requestHeaders = new Headers(headers);
 
   if (auth) {
-    const session = loadStoredSession();
-    if (session?.token) {
-      requestHeaders.set("Authorization", `Bearer ${session.token}`);
+    const tokenFromStorage =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem(TOKEN_STORAGE_KEY)?.trim() ?? null
+        : null;
+    const tokenFromSession = loadStoredSession()?.token?.trim() ?? null;
+    const token = tokenFromStorage && tokenFromStorage.length > 0 ? tokenFromStorage : tokenFromSession;
+    if (token) {
+      requestHeaders.set("Authorization", `Bearer ${token}`);
     }
   }
 
@@ -120,7 +133,7 @@ export const apiFetch = async <T>(
   const parsedBody = parseResponseBody(rawBody, contentType);
 
   if (!response.ok) {
-    if (response.status === 401 && auth) {
+    if (response.status === 401 && auth && !skipAuthResetOn401) {
       clearStoredSession();
       unauthorizedHandler?.();
     }

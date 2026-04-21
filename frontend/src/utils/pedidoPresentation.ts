@@ -33,6 +33,7 @@ export const TAMANO_LABELS: Record<TipoTamano, string> = {
 export const TIPO_COBRO_LABELS: Record<TipoCobro, string> = {
   CONTRA_ENTREGA: "Contra entrega",
   WEB: "Web",
+  PAGO_WEB: "Pago web",
 };
 
 export const formatDateTime = (value: string): string => {

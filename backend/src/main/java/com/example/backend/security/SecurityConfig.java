@@ -41,6 +41,9 @@ public class SecurityConfig {
                         }))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/pagos/checkout").hasRole("CLIENTE")
+                        .requestMatchers(HttpMethod.GET, "/api/pagos/verificar").hasRole("CLIENTE")
+                        .requestMatchers(HttpMethod.POST, "/api/pagos/confirmar").permitAll()
                         .requestMatchers(HttpMethod.DELETE, "/api/pedidos/**").hasRole("GERENTE")
                         .requestMatchers(HttpMethod.POST, "/api/pedidos").hasRole("CLIENTE")
                         .requestMatchers(HttpMethod.PUT, "/api/pedidos/*/asignar").hasRole("GERENTE")

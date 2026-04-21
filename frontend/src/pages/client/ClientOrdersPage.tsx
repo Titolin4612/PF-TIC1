@@ -18,7 +18,8 @@ import {
   formatZona,
 } from "../../utils/pedidoPresentation";
 
-const ZONA_OPTIONS = ["Medellin", "Envigado", "Bello", "Itagui"] as const;
+const ZONA_OPTIONS = ["Medellin", "Envigado", "Bello", "Itagui", "Sabaneta"] as const;
+const COBRO_OPTIONS: TipoCobro[] = ["CONTRA_ENTREGA", "PAGO_WEB"];
 
 interface ClientCreateFormState {
   direccionEntrega: string;
@@ -36,7 +37,7 @@ const INITIAL_CREATE_FORM: ClientCreateFormState = {
   peso: "",
   tamano: "PEQUENO",
   fragil: false,
-  tipoCobro: "WEB",
+  tipoCobro: "PAGO_WEB",
   prioritario: false,
 };
 
@@ -390,9 +391,9 @@ export const ClientOrdersPage = () => {
                   }))
                 }
               >
-                {Object.entries(TIPO_COBRO_LABELS).map(([tipoCobro, label]) => (
+                {COBRO_OPTIONS.map((tipoCobro) => (
                   <option key={tipoCobro} value={tipoCobro}>
-                    {label}
+                    {TIPO_COBRO_LABELS[tipoCobro]}
                   </option>
                 ))}
               </select>
