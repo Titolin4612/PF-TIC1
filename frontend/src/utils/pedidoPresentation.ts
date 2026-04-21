@@ -75,8 +75,8 @@ export const getClienteLabel = (clienteEmail: string | null): string =>
 export const getRepartidorLabel = (repartidorEmail: string | null): string =>
   repartidorEmail?.trim() ? repartidorEmail : "Sin asignar";
 
-export const formatZona = (value: string): string => {
-  const normalized = value.trim();
+export const formatZona = (value: string | null | undefined): string => {
+  const normalized = (value ?? "").trim();
   return normalized.length > 0 ? normalized : "Sin zona";
 };
 

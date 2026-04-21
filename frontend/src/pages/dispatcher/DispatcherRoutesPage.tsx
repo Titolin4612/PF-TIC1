@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { ApiError } from "../../api/apiFetch";
+import { optimizeRoute } from "../../api/routeApi";
 import { MetricCard } from "../../components/MetricCard";
+import { MapErrorBoundary } from "../../components/MapErrorBoundary";
 import { PedidoStatusBadge } from "../../components/PedidoStatusBadge";
 import { RouteMap } from "../../components/RouteMap";
 import { useGeocodedPedidos } from "../../hooks/useGeocodedPedidos";
@@ -26,6 +29,9 @@ import { useDispatcherOrders } from "./useDispatcherOrders";
 export const DispatcherRoutesPage = () => {
   const { pedidos, loading, refreshing, error, refresh } = useDispatcherOrders();
   const [optimizedRoute, setOptimizedRoute] = useState<GeoStop[] | null>(null);
+  const [routeDistanceKm, setRouteDistanceKm] = useState<number | null>(null);
+  const [routeError, setRouteError] = useState<string | null>(null);
+  const [optimizing, setOptimizing] = useState(false);
   const activePedidos = useMemo(
     () => pedidos.filter((p) => p.estado !== "ENTREGADO" && p.estado !== "CANCELADO"),
     [pedidos]
@@ -42,11 +48,48 @@ export const DispatcherRoutesPage = () => {
   const waitingForAssignment = allUnassignedPedidos.length;
 
   const { stops, geocoding, progress, total } = useGeocodedPedidos(activePedidos);
-  const routeDistance = optimizedRoute ? totalDistanceKm(optimizedRoute) : null;
+  const routeDistance = optimizedRoute
+    ? (routeDistanceKm ?? totalDistanceKm(optimizedRoute))
+    : null;
 
-  const handleOptimize = () => {
+  const handleOptimize = async () => {
     if (!stops.length) return;
-    setOptimizedRoute(nearestNeighborTSP(stops));
+
+    setRouteError(null);
+    setOptimizing(true);
+
+    try {
+      const response = await optimizeRoute(stops);
+
+      if (response?.stops?.length) {
+        setOptimizedRoute(response.stops);
+        setRouteDistanceKm(response.totalDistanceKm ?? null);
+        return;
+      }
+
+      const fallback = nearestNeighborTSP(stops);
+      setOptimizedRoute(fallback);
+      setRouteDistanceKm(totalDistanceKm(fallback));
+      setRouteError("No se pudo obtener una ruta del servidor. Se uso optimizacion local.");
+    } catch (requestError) {
+      const fallback = nearestNeighborTSP(stops);
+      setOptimizedRoute(fallback);
+      setRouteDistanceKm(totalDistanceKm(fallback));
+
+      if (requestError instanceof ApiError) {
+        if (requestError.status === 401) {
+          setRouteError("Tu sesion no fue validada para esta accion. Se uso optimizacion local.");
+        } else if (requestError.status === 403) {
+          setRouteError("No tienes permisos para optimizar en servidor. Se uso optimizacion local.");
+        } else {
+          setRouteError("No se pudo optimizar en servidor. Se uso optimizacion local.");
+        }
+      } else {
+        setRouteError("No se pudo optimizar en servidor. Se uso optimizacion local.");
+      }
+    } finally {
+      setOptimizing(false);
+    }
   };
   const zonesWithBacklog = zoneSummaries.filter((summary) => summary.pendientes > 0).length;
   const topZone = topZones[0];
@@ -90,6 +133,7 @@ export const DispatcherRoutesPage = () => {
       </header>
 
       {error ? <div className="alert alert--error">{error}</div> : null}
+      {routeError ? <div className="alert alert--error">{routeError}</div> : null}
 
       <section className="kpi-grid">
         <MetricCard label="Repartidores activos" value={activeCourierCount} />
@@ -137,16 +181,20 @@ export const DispatcherRoutesPage = () => {
             <button
               type="button"
               className="button primary"
-              disabled={geocoding || stops.length === 0}
-              onClick={handleOptimize}
+              disabled={geocoding || optimizing || stops.length === 0}
+              onClick={() => void handleOptimize()}
             >
-              {geocoding ? "Cargando mapa..." : "Calcular ruta optima"}
+              {geocoding || optimizing ? "Cargando mapa..." : "Calcular ruta optima"}
             </button>
             {optimizedRoute && (
               <button
                 type="button"
                 className="button ghost"
-                onClick={() => setOptimizedRoute(null)}
+                onClick={() => {
+                  setOptimizedRoute(null);
+                  setRouteDistanceKm(null);
+                  setRouteError(null);
+                }}
               >
                 Limpiar ruta
               </button>
@@ -165,11 +213,13 @@ export const DispatcherRoutesPage = () => {
           />
         ) : (
           <>
-            <RouteMap
-              stops={stops}
-              route={optimizedRoute ?? undefined}
-              height="440px"
-            />
+            <MapErrorBoundary height="440px">
+              <RouteMap
+                stops={stops}
+                route={optimizedRoute ?? undefined}
+                height="440px"
+              />
+            </MapErrorBoundary>
 
             {optimizedRoute && (
               <div className="route-result">
