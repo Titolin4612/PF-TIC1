@@ -7,6 +7,7 @@ import { AuthenticatedLayout } from "../layouts/AuthenticatedLayout";
 import { LoginPage } from "../pages/auth/LoginPage";
 import { RegisterPage } from "../pages/auth/RegisterPage";
 import { ClientOrdersPage } from "../pages/client/ClientOrdersPage";
+import PagoExitoso from "../pages/client/PagoExitoso.jsx";
 import { DispatcherDashboardPage } from "../pages/dispatcher/DispatcherDashboardPage";
 import { DispatcherOrdersPage } from "../pages/dispatcher/DispatcherOrdersPage";
 import { DispatcherRoutesPage } from "../pages/dispatcher/DispatcherRoutesPage";
@@ -33,6 +34,8 @@ export const AppRouter = () => (
       <Route path={APP_ROUTES.login} element={<LoginPage />} />
       <Route path={APP_ROUTES.register} element={<RegisterPage />} />
     </Route>
+
+    <Route path={APP_ROUTES.pagoExitoso} element={<PagoExitoso />} />
 
     <Route element={<ProtectedRoute />}>
       <Route element={<AuthenticatedLayout />}>

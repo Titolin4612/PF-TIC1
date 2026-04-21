@@ -7,7 +7,8 @@ export type EstadoPedido =
 
 export type TipoTamano = "PEQUENO" | "MEDIANO" | "GRANDE";
 
-export type TipoCobro = "CONTRA_ENTREGA" | "WEB";
+export type TipoCobro = "CONTRA_ENTREGA" | "WEB" | "PAGO_WEB";
+export type EstadoPago = "PENDIENTE" | "PAGADO" | "FALLIDO";
 
 export interface Pedido {
   id: number;
@@ -20,6 +21,8 @@ export interface Pedido {
   fragil: boolean;
   tipoCobro: TipoCobro;
   prioritario: boolean;
+  costoDomicilio?: number | null;
+  estadoPago?: EstadoPago | null;
   clienteEmail: string | null;
   repartidorEmail: string | null;
 }

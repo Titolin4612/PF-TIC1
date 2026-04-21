@@ -5,6 +5,7 @@ import {
   type Pedido,
   type PedidoInput,
 } from "../../api/pedidoApi";
+import { crearCheckout } from "../../api/pagoApi";
 import { useAuth } from "../../auth/useAuth";
 import { ApiError } from "../../api/apiFetch";
 
@@ -12,6 +13,8 @@ const normalizeEmail = (value: string | null | undefined): string =>
   value?.trim().toLowerCase() ?? "";
 
 const CLIENT_ACCOUNT_ERROR = "No pudimos identificar tu cuenta para cargar tus pedidos.";
+const WEB_PAYMENT_REDIRECT_ERROR =
+  "No fue posible abrir Stripe Checkout. Revisa si el navegador bloqueo la redireccion.";
 
 const sortPedidosByNewest = (pedidos: Pedido[]): Pedido[] =>
   [...pedidos].sort((left, right) => {
@@ -43,12 +46,20 @@ const getClientErrorMessage = (
     }
 
     if (error.status === 400 || error.status === 422) {
+      if (error.message?.trim()) {
+        return error.message;
+      }
+
       return action === "create"
         ? "Revisa los datos del pedido e intentalo nuevamente."
         : "No fue posible procesar tus pedidos con los datos actuales.";
     }
 
     if (error.status >= 500) {
+      if (error.message?.trim()) {
+        return error.message;
+      }
+
       if (action === "create") {
         return "No pudimos registrar tu pedido en este momento.";
       }
@@ -67,6 +78,9 @@ const getClientErrorMessage = (
     ? "No fue posible cargar tus pedidos."
     : "No fue posible actualizar tus pedidos.";
 };
+
+const esCobroWeb = (tipoCobro: PedidoInput["tipoCobro"]): boolean =>
+  tipoCobro === "WEB" || tipoCobro === "PAGO_WEB";
 
 export const useClientPedidos = () => {
   const { session } = useAuth();
@@ -97,11 +111,7 @@ export const useClientPedidos = () => {
 
         const data = await obtenerPedidos();
 
-        const ownPedidos = Array.isArray(data)
-          ? sortPedidosByNewest(
-              data.filter((pedido) => normalizeEmail(pedido.clienteEmail) === clientEmail)
-            )
-          : [];
+        const ownPedidos = Array.isArray(data) ? sortPedidosByNewest(data) : [];
 
         setPedidos(ownPedidos);
       } catch (requestError) {
@@ -140,6 +150,18 @@ export const useClientPedidos = () => {
       if (!clientEmail) {
         setPedidos([]);
         setError(CLIENT_ACCOUNT_ERROR);
+        return null;
+      }
+
+      if (esCobroWeb(pedido.tipoCobro)) {
+        const checkout = await crearCheckout(pedido);
+
+        if (!checkout.url) {
+          setError(WEB_PAYMENT_REDIRECT_ERROR);
+          return null;
+        }
+
+        window.location.assign(checkout.url);
         return null;
       }
 

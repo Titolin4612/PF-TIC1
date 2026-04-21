@@ -11,6 +11,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Id;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
+import jakarta.persistence.Column;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
@@ -50,9 +51,17 @@ public class Pedido {
 
     private Boolean prioritario;
 
+    private Double costoDomicilio;
+
+    @Enumerated(EnumType.STRING)
+    private EstadoPago estadoPago;
+
     private String clienteEmail;
 
     private String repartidorEmail;
+
+    @Column(unique = true)
+    private String stripeSessionId;
 
     public Pedido() {
         this.fechaCreacion = LocalDateTime.now();
@@ -130,6 +139,22 @@ public class Pedido {
         this.prioritario = prioritario;
     }
 
+    public Double getCostoDomicilio() {
+        return costoDomicilio;
+    }
+
+    public void setCostoDomicilio(Double costoDomicilio) {
+        this.costoDomicilio = costoDomicilio;
+    }
+
+    public EstadoPago getEstadoPago() {
+        return estadoPago;
+    }
+
+    public void setEstadoPago(EstadoPago estadoPago) {
+        this.estadoPago = estadoPago;
+    }
+
     public String getClienteEmail() {
         return clienteEmail;
     }
@@ -144,5 +169,13 @@ public class Pedido {
 
     public void setRepartidorEmail(String repartidorEmail) {
         this.repartidorEmail = repartidorEmail;
+    }
+
+    public String getStripeSessionId() {
+        return stripeSessionId;
+    }
+
+    public void setStripeSessionId(String stripeSessionId) {
+        this.stripeSessionId = stripeSessionId;
     }
 }

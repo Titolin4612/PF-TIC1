@@ -8,4 +8,5 @@ export const APP_ROUTES = {
   driverDeliveries: "/driver/deliveries",
   driverRoute: "/driver/route",
   clientOrders: "/client/orders",
+  pagoExitoso: "/pago-exitoso",
 } as const;

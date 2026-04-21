@@ -31,6 +31,15 @@ public class PedidoController {
 
     @PostMapping
     public Pedido crearPedido(@Valid @RequestBody Pedido pedido, Authentication authentication) {
+        System.out.println("Pedido recibido: direccionEntrega=" + pedido.getDireccionEntrega()
+                + ", estado=" + pedido.getEstado()
+                + ", zona=" + pedido.getZona()
+                + ", peso=" + pedido.getPeso()
+                + ", tamano=" + pedido.getTamano()
+                + ", fragil=" + pedido.getFragil()
+                + ", tipoCobro=" + pedido.getTipoCobro()
+                + ", prioritario=" + pedido.getPrioritario()
+                + ", clienteAuth=" + authentication.getName());
         return pedidoService.crearPedidoComoCliente(pedido, authentication.getName());
     }
 

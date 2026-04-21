@@ -9,7 +9,23 @@ import { getDefaultRouteByRole } from "../../utils/roleRedirect";
 type AuthLocationState = {
   from?: {
     pathname?: string;
+    search?: string;
   };
+};
+
+const resolveReturnTo = (location: ReturnType<typeof useLocation>): string | null => {
+  const queryReturnTo = new URLSearchParams(location.search).get("returnTo");
+  if (queryReturnTo && queryReturnTo.startsWith("/")) {
+    return queryReturnTo;
+  }
+
+  const from = (location.state as AuthLocationState | null)?.from;
+  if (from?.pathname) {
+    const search = from.search ?? "";
+    return `${from.pathname}${search}`;
+  }
+
+  return null;
 };
 
 export const LoginPage = () => {
@@ -21,8 +37,10 @@ export const LoginPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const returnTo = resolveReturnTo(location);
+
   if (isAuthenticated && session) {
-    return <Navigate to={getDefaultRouteByRole(session.rol)} replace />;
+    return <Navigate to={returnTo || getDefaultRouteByRole(session.rol)} replace />;
   }
 
   const handleSubmit = async (event: FormEvent) => {
@@ -32,9 +50,7 @@ export const LoginPage = () => {
 
     try {
       const nextSession = await login({ email, password });
-      const fromPath = (location.state as AuthLocationState | null)?.from?.pathname;
-
-      navigate(fromPath || getDefaultRouteByRole(nextSession.rol), { replace: true });
+      navigate(returnTo || getDefaultRouteByRole(nextSession.rol), { replace: true });
     } catch (requestError) {
       setError(getAuthErrorMessage("login", requestError));
     } finally {

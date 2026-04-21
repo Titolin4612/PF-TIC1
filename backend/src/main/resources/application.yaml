@@ -28,3 +28,8 @@ app:
   jwt:
     secret: 4f8d7b0f6bba4a6aa9a91ce2f0875b8f4f8d7b0f6bba4a6aa9a91ce2f0875b8f
     expiration-ms: 86400000
+
+stripe:
+  secret-key: ${STRIPE_SECRET_KEY:}
+  success-url: ${STRIPE_SUCCESS_URL:http://localhost:5173/pago-exitoso?session_id={CHECKOUT_SESSION_ID}}
+  cancel-url: ${STRIPE_CANCEL_URL:http://localhost:5173/pago-cancelado}
