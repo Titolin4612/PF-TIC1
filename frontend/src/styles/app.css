@@ -1,3 +1,5 @@
+@import "leaflet/dist/leaflet.css";
+
 :root {
   color-scheme: light;
   font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -1960,4 +1962,157 @@ select:focus {
   .dispatcher-toggle-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* =====================
+   MAP & ROUTE STYLES
+   ===================== */
+
+.geocoding-status {
+  font-size: 0.8rem;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.geocoding-status::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3b82f6;
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
+}
+
+.map-hint {
+  margin-top: 0.75rem;
+  font-size: 0.82rem;
+  color: #64748b;
+  padding: 0 0.25rem;
+}
+
+.map-loading {
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.route-result {
+  margin-top: 1.25rem;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 1rem;
+}
+
+.route-result__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-bottom: 0.9rem;
+}
+
+.route-result__summary strong {
+  font-size: 0.95rem;
+  color: #0f172a;
+}
+
+.route-result__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.route-result__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.route-result__item:last-child {
+  border-bottom: none;
+}
+
+.priority-chip {
+  display: inline-block;
+  margin-left: 0.4rem;
+  font-size: 0.72rem;
+  color: #d97706;
+  font-weight: 600;
+}
+
+/* Leaflet popup customization */
+.map-popup {
+  min-width: 180px;
+}
+
+.map-popup__title {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #0f172a;
+  margin: 0 0 0.2rem;
+}
+
+.map-popup__address {
+  font-size: 0.82rem;
+  color: #334155;
+  margin: 0 0 0.15rem;
+  word-break: break-word;
+}
+
+.map-popup__meta {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin: 0;
+}
+
+/* Priority marker tint */
+.marker-priority {
+  filter: hue-rotate(200deg) saturate(2);
+}
+
+/* Active stop marker (bigger) */
+.marker-active {
+  filter: hue-rotate(120deg) saturate(2) brightness(1.1);
+}
+
+/* Popup nav buttons (Waze / Google Maps) */
+.map-popup__nav {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.map-popup__nav-btn {
+  flex: 1;
+  text-align: center;
+  padding: 0.3rem 0.5rem;
+  border-radius: 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+
+.map-popup__nav-btn:hover {
+  opacity: 0.85;
+}
+
+.map-popup__nav-btn--waze {
+  background: #05c8f7;
+  color: #000;
+}
+
+.map-popup__nav-btn--gmaps {
+  background: #4285f4;
+  color: #fff;
 }

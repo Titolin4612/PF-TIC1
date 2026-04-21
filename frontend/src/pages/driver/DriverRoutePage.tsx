@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { PedidoStatusBadge } from "../../components/PedidoStatusBadge";
+import { RouteMap } from "../../components/RouteMap";
+import { useGeocodedPedidos } from "../../hooks/useGeocodedPedidos";
 import { APP_ROUTES } from "../../router/paths";
 import type { EstadoPedido } from "../../types/pedido";
 import {
@@ -21,6 +23,7 @@ import {
   getDriverSuccessMessage,
   isDriverActionablePedido,
 } from "../../utils/driverPresentation";
+import { nearestNeighborTSP } from "../../utils/tsp";
 import { useDriverPedidos } from "./useDriverPedidos";
 
 const getDriverRoutePath = (pedidoId: number): string =>
@@ -59,6 +62,13 @@ export const DriverRoutePage = () => {
         ) ?? null;
   const visibleFeedback =
     selectedPedido && feedback?.pedidoId === selectedPedido.id ? feedback.message : null;
+
+  const pedidosMemo = useMemo(() => pedidos, [pedidos]);
+  const { stops, geocoding } = useGeocodedPedidos(pedidosMemo);
+  const optimizedStops = stops.length > 1 ? nearestNeighborTSP(stops) : stops;
+  const activeStopId = selectedPedido
+    ? stops.find((s) => s.id === selectedPedido.id)?.id
+    : undefined;
 
   useEffect(() => {
     if (!selectedPedido) {
@@ -113,6 +123,32 @@ export const DriverRoutePage = () => {
 
       {error ? <div className="alert alert--error">{error}</div> : null}
       {visibleFeedback ? <div className="alert alert--success">{visibleFeedback}</div> : null}
+
+      {pedidos.length > 0 && (
+        <article className="card">
+          <div className="card__header card__header--split">
+            <div>
+              <p className="eyebrow">Ruta optimizada · TSP</p>
+              <h2>Mis paradas en el mapa</h2>
+            </div>
+            {geocoding && (
+              <span className="geocoding-status">Geocodificando paradas...</span>
+            )}
+          </div>
+          {stops.length > 0 ? (
+            <RouteMap
+              stops={stops}
+              route={optimizedStops}
+              activeStopId={activeStopId}
+              height="340px"
+            />
+          ) : geocoding ? (
+            <div className="skeleton-row" style={{ height: "340px" }} />
+          ) : (
+            <p className="map-hint">No se pudieron geocodificar las direcciones.</p>
+          )}
+        </article>
+      )}
 
       <section className="driver-route-layout">
         <article className="card driver-route-card">
