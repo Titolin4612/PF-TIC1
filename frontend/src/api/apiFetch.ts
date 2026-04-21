@@ -1,0 +1,157 @@
+import { clearStoredSession, loadStoredSession } from "../auth/authStorage";
+
+type ApiFetchOptions = RequestInit & {
+  auth?: boolean;
+  parseAs?: "json" | "text" | "void";
+  skipAuthResetOn401?: boolean;
+};
+
+type BackendErrorPayload = {
+  mensaje?: string;
+  message?: string;
+  error?: string;
+};
+
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080").replace(
+  /\/$/,
+  ""
+);
+const TOKEN_STORAGE_KEY = "token";
+
+let unauthorizedHandler: (() => void) | null = null;
+
+const buildUrl = (path: string): string => {
+  if (path.startsWith("http://") || path.startsWith("https://")) {
+    return path;
+  }
+
+  return `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
+};
+
+const parseResponseBody = (rawBody: string, contentType: string): unknown => {
+  if (!rawBody) {
+    return null;
+  }
+
+  if (contentType.includes("application/json")) {
+    try {
+      return JSON.parse(rawBody) as unknown;
+    } catch {
+      return rawBody;
+    }
+  }
+
+  return rawBody;
+};
+
+const getErrorMessage = (status: number, payload: unknown): string => {
+  if (typeof payload === "string" && payload.trim()) {
+    return payload;
+  }
+
+  if (payload && typeof payload === "object") {
+    const backendPayload = payload as BackendErrorPayload;
+    return (
+      backendPayload.mensaje ||
+      backendPayload.message ||
+      backendPayload.error ||
+      `Error HTTP ${status}`
+    );
+  }
+
+  return `Error HTTP ${status}`;
+};
+
+export class ApiError extends Error {
+  readonly status: number;
+
+  readonly payload: unknown;
+
+  constructor(message: string, status: number, payload: unknown) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.payload = payload;
+  }
+}
+
+export class ApiNetworkError extends Error {
+  constructor(message = "Network request failed") {
+    super(message);
+    this.name = "ApiNetworkError";
+  }
+}
+
+export const registerUnauthorizedHandler = (
+  handler: (() => void) | null
+): void => {
+  unauthorizedHandler = handler;
+};
+
+export const apiFetch = async <T>(
+  path: string,
+  options: ApiFetchOptions = {}
+): Promise<T> => {
+  const {
+    auth = false,
+    parseAs = "json",
+    skipAuthResetOn401 = false,
+    headers,
+    ...requestInit
+  } = options;
+  const requestHeaders = new Headers(headers);
+
+  if (auth) {
+    const tokenFromStorage =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem(TOKEN_STORAGE_KEY)?.trim() ?? null
+        : null;
+    const tokenFromSession = loadStoredSession()?.token?.trim() ?? null;
+    const token = tokenFromStorage && tokenFromStorage.length > 0 ? tokenFromStorage : tokenFromSession;
+    if (token) {
+      requestHeaders.set("Authorization", `Bearer ${token}`);
+    }
+  }
+
+  let response: Response;
+
+  try {
+    response = await fetch(buildUrl(path), {
+      ...requestInit,
+      headers: requestHeaders,
+    });
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new ApiNetworkError(error.message);
+    }
+
+    throw new ApiNetworkError();
+  }
+
+  const rawBody = response.status === 204 ? "" : await response.text();
+  const contentType = response.headers.get("content-type") ?? "";
+  const parsedBody = parseResponseBody(rawBody, contentType);
+
+  if (!response.ok) {
+    if (response.status === 401 && auth && !skipAuthResetOn401) {
+      clearStoredSession();
+      unauthorizedHandler?.();
+    }
+
+    throw new ApiError(
+      getErrorMessage(response.status, parsedBody),
+      response.status,
+      parsedBody
+    );
+  }
+
+  if (parseAs === "void" || response.status === 204) {
+    return undefined as T;
+  }
+
+  if (parseAs === "text") {
+    return rawBody as T;
+  }
+
+  return parsedBody as T;
+};

@@ -1,66 +1,81 @@
-export type EstadoPedido =
-  | "CREADO"
-  | "EN_PREPARACION"
-  | "EN_CAMINO"
-  | "ENTREGADO"
-  | "CANCELADO";
+import { apiFetch } from "./apiFetch";
+import type {
+  EstadoPedido,
+  Pedido,
+  PedidoInput,
+  PedidoUpdateInput,
+} from "../types/pedido";
 
-export interface Pedido {
-  id: number;
-  direccionEntrega: string;
-  estado: EstadoPedido;
-  fechaCreacion: string;
-}
+export type {
+  EstadoPedido,
+  Pedido,
+  PedidoInput,
+  PedidoUpdateInput,
+  TipoCobro,
+  TipoTamano,
+} from "../types/pedido";
 
-export interface PedidoInput {
-  direccionEntrega: string;
-  estado: EstadoPedido;
-}
-
-const API_URL = "http://localhost:8080/api/pedidos";
-
-const handleResponse = async (response: Response) => {
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || "Error en la solicitud");
-  }
-  if (response.status === 204) return null;
-  return response.json();
-};
+const API_URL = "/api/pedidos";
 
 export const obtenerPedidos = async (): Promise<Pedido[]> => {
-  const response = await fetch(API_URL);
-  return handleResponse(response);
+  return apiFetch<Pedido[]>(API_URL, { auth: true });
+};
+
+export const obtenerPedido = async (id: number): Promise<Pedido> => {
+  return apiFetch<Pedido>(`${API_URL}/${id}`, { auth: true });
 };
 
 export const crearPedido = async (pedido: PedidoInput): Promise<Pedido> => {
-  const response = await fetch(API_URL, {
+  return apiFetch<Pedido>(API_URL, {
     method: "POST",
+    auth: true,
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(pedido),
   });
-
-  return handleResponse(response);
 };
 
 export const actualizarEstado = async (
   id: number,
   estado: EstadoPedido
 ): Promise<Pedido> => {
-  const url = `${API_URL}/${id}/estado?estado=${estado}`;
-  const response = await fetch(url, {
+  return apiFetch<Pedido>(`${API_URL}/${id}/estado?estado=${estado}`, {
     method: "PUT",
+    auth: true,
   });
+};
 
-  return handleResponse(response);
+export const asignarRepartidor = async (
+  id: number,
+  repartidorEmail: string
+): Promise<Pedido> => {
+  const encodedEmail = encodeURIComponent(repartidorEmail.trim());
+
+  return apiFetch<Pedido>(`${API_URL}/${id}/asignar?repartidorEmail=${encodedEmail}`, {
+    method: "PUT",
+    auth: true,
+  });
+};
+
+export const actualizarPedido = async (
+  id: number,
+  pedido: PedidoUpdateInput
+): Promise<Pedido> => {
+  return apiFetch<Pedido>(`${API_URL}/${id}`, {
+    method: "PUT",
+    auth: true,
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(pedido),
+  });
 };
 
 export const eliminarPedido = async (id: number): Promise<void> => {
-  const response = await fetch(`${API_URL}/${id}`, {
+  await apiFetch<void>(`${API_URL}/${id}`, {
     method: "DELETE",
+    auth: true,
+    parseAs: "void",
   });
-
-  await handleResponse(response);
 };
