@@ -6,5 +6,8 @@ public record GeoStopRequest(
         double lng,
         String label,
         String subLabel,
-        boolean prioritario) {
+        boolean prioritario,
+        Double peso,
+        Boolean fragil,
+        Integer tiempoEstimadoMinutos) {
 }

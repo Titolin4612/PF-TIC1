@@ -52,8 +52,11 @@ export function useGeocodedPedidos(pedidos: Pedido[]): GeocodingState {
           lat,
           lng,
           label: p.direccionEntrega,
-          subLabel: `#${p.id} · ${p.zona ?? "Sin zona"}`,
+          subLabel: `#${p.id} - ${p.zona ?? "Sin zona"}`,
           prioritario: p.prioritario,
+          peso: p.peso,
+          fragil: p.fragil,
+          tiempoEstimadoMinutos: p.tiempoEstimadoMinutos ?? null,
         };
       });
 
@@ -66,7 +69,7 @@ export function useGeocodedPedidos(pedidos: Pedido[]): GeocodingState {
     return () => {
       abortRef.current = true;
     };
-    // pedidoKey guarantees stable identity — avoids infinite re-runs
+    // pedidoKey guarantees stable identity and avoids infinite re-runs
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pedidoKey, run]);
 

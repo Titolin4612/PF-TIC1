@@ -25,6 +25,11 @@ export interface Pedido {
   estadoPago?: EstadoPago | null;
   clienteEmail: string | null;
   repartidorEmail: string | null;
+  fechaAsignacion?: string | null;
+  fechaEntrega?: string | null;
+  tiempoEstimadoMinutos?: number | null;
+  alertaRetraso?: boolean | null;
+  motivoAlerta?: string | null;
 }
 
 export interface PedidoInput {
@@ -36,6 +41,7 @@ export interface PedidoInput {
   fragil: boolean;
   tipoCobro: TipoCobro;
   prioritario: boolean;
+  tiempoEstimadoMinutos?: number | null;
 }
 
 export interface PedidoUpdateInput {

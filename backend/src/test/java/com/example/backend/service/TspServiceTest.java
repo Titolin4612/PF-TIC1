@@ -13,9 +13,9 @@ class TspServiceTest {
 
     @Test
     void nearestNeighborTsp_placesPrioritariosFirst_thenNearestOrder() {
-        GeoStopRequest a = new GeoStopRequest(1L, 6.24, -75.58, "A", "", false);
-        GeoStopRequest b = new GeoStopRequest(2L, 6.25, -75.57, "B", "", true);
-        GeoStopRequest c = new GeoStopRequest(3L, 6.26, -75.56, "C", "", false);
+        GeoStopRequest a = stop(1L, false);
+        GeoStopRequest b = stop(2L, true);
+        GeoStopRequest c = stop(3L, false);
 
         List<GeoStopRequest> route = tspService.nearestNeighborTSP(List.of(a, b, c));
 
@@ -25,9 +25,9 @@ class TspServiceTest {
 
     @Test
     void nearestNeighborTsp_withDistanceMatrix_usesMatrixForSelection() {
-        GeoStopRequest s1 = new GeoStopRequest(1L, 0, 0, "S1", "", false);
-        GeoStopRequest s2 = new GeoStopRequest(2L, 0, 0, "S2", "", false);
-        GeoStopRequest s3 = new GeoStopRequest(3L, 0, 0, "S3", "", false);
+        GeoStopRequest s1 = stop(1L, false);
+        GeoStopRequest s2 = stop(2L, false);
+        GeoStopRequest s3 = stop(3L, false);
 
         List<GeoStopRequest> stops = List.of(s1, s2, s3);
         double[][] matrix = new double[][]{
@@ -43,9 +43,9 @@ class TspServiceTest {
 
     @Test
     void totalDistanceKm_withMatrix_convertsMetersToRoundedKm() {
-        GeoStopRequest s1 = new GeoStopRequest(1L, 0, 0, "S1", "", false);
-        GeoStopRequest s2 = new GeoStopRequest(2L, 0, 0, "S2", "", false);
-        GeoStopRequest s3 = new GeoStopRequest(3L, 0, 0, "S3", "", false);
+        GeoStopRequest s1 = stop(1L, false);
+        GeoStopRequest s2 = stop(2L, false);
+        GeoStopRequest s3 = stop(3L, false);
 
         List<GeoStopRequest> original = List.of(s1, s2, s3);
         List<GeoStopRequest> ordered = List.of(s1, s3, s2);
@@ -62,10 +62,33 @@ class TspServiceTest {
 
     @Test
     void totalDistanceKm_withHaversine_returnsZeroForSingleStop() {
-        GeoStopRequest single = new GeoStopRequest(1L, 6.24, -75.58, "A", "", false);
+        GeoStopRequest single = stop(1L, false);
 
         double totalKm = tspService.totalDistanceKm(List.of(single));
 
         assertEquals(0.0, totalKm);
+    }
+
+    @Test
+    void nearestNeighborTsp_withDistanceMatrix_usesFragileAndSlaAsSecondaryPriority() {
+        GeoStopRequest s1 = stop(1L, false);
+        GeoStopRequest s2 = new GeoStopRequest(2L, 0, 0, "S2", "", false, 2.0, true, 30);
+        GeoStopRequest s3 = stop(3L, false);
+
+        List<GeoStopRequest> stops = List.of(s1, s2, s3);
+        double[][] matrix = new double[][]{
+                {0, 105, 100},
+                {105, 0, 100},
+                {100, 100, 0}
+        };
+
+        List<GeoStopRequest> route = tspService.nearestNeighborTSP(stops, matrix);
+
+        assertEquals(List.of(1L, 2L, 3L), route.stream().map(GeoStopRequest::id).toList());
+    }
+
+    private GeoStopRequest stop(Long id, boolean prioritario) {
+        return new GeoStopRequest(id, 6.24 + (id * 0.01), -75.58 + (id * 0.01),
+                "S" + id, "", prioritario, 2.0, false, 45);
     }
 }

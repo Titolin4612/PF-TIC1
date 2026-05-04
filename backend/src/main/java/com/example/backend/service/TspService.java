@@ -9,7 +9,7 @@ import java.util.List;
 @Service
 public class TspService {
 
-    /** Nearest-neighbor TSP using Haversine (fallback). */
+    /** Nearest-neighbor TSP using Haversine fallback and operational priority. */
     public List<GeoStopRequest> nearestNeighborTSP(List<GeoStopRequest> stops) {
         if (stops.size() <= 1) return new ArrayList<>(stops);
 
@@ -27,9 +27,9 @@ public class TspService {
         while (!unvisited.isEmpty()) {
             GeoStopRequest current = route.get(route.size() - 1);
             int nearestIdx = 0;
-            double nearestDist = haversineKm(current, unvisited.get(0));
+            double nearestDist = weightedCost(unvisited.get(0), haversineKm(current, unvisited.get(0)));
             for (int i = 1; i < unvisited.size(); i++) {
-                double d = haversineKm(current, unvisited.get(i));
+                double d = weightedCost(unvisited.get(i), haversineKm(current, unvisited.get(i)));
                 if (d < nearestDist) { nearestDist = d; nearestIdx = i; }
             }
             route.add(unvisited.remove(nearestIdx));
@@ -37,7 +37,7 @@ public class TspService {
         return route;
     }
 
-    /** Nearest-neighbor TSP using a road distance matrix (meters). Prioritarios always first. */
+    /** Nearest-neighbor TSP using a road distance matrix. Prioritarios always first. */
     public List<GeoStopRequest> nearestNeighborTSP(List<GeoStopRequest> stops, double[][] distMatrix) {
         if (stops.size() <= 1) return new ArrayList<>(stops);
 
@@ -60,9 +60,9 @@ public class TspService {
         while (!unvisited.isEmpty()) {
             int currentIdx = routeIdxs.get(routeIdxs.size() - 1);
             int nearestPos = 0;
-            double nearestDist = distMatrix[currentIdx][unvisited.get(0)];
+            double nearestDist = weightedCost(stops.get(unvisited.get(0)), distMatrix[currentIdx][unvisited.get(0)]);
             for (int i = 1; i < unvisited.size(); i++) {
-                double d = distMatrix[currentIdx][unvisited.get(i)];
+                double d = weightedCost(stops.get(unvisited.get(i)), distMatrix[currentIdx][unvisited.get(i)]);
                 if (d < nearestDist) { nearestDist = d; nearestPos = i; }
             }
             routeIdxs.add(unvisited.remove(nearestPos));
@@ -89,6 +89,23 @@ public class TspService {
             total += haversineKm(stops.get(i), stops.get(i + 1));
         }
         return Math.round(total * 10.0) / 10.0;
+    }
+
+    private double weightedCost(GeoStopRequest stop, double distance) {
+        double factor = 1.0;
+        if (stop.prioritario()) {
+            factor -= 0.25;
+        }
+        if (Boolean.TRUE.equals(stop.fragil())) {
+            factor -= 0.10;
+        }
+        if (stop.tiempoEstimadoMinutos() != null && stop.tiempoEstimadoMinutos() <= 35) {
+            factor -= 0.10;
+        }
+        if (stop.peso() != null && stop.peso() > 20) {
+            factor += 0.05;
+        }
+        return distance * Math.max(factor, 0.55);
     }
 
     private double haversineKm(GeoStopRequest a, GeoStopRequest b) {

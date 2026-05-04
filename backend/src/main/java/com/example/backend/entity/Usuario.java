@@ -11,6 +11,7 @@ import jakarta.persistence.Table;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
 @Table(name = "usuario")
@@ -30,12 +31,21 @@ public class Usuario {
 
     @NotBlank(message = "La password es obligatoria")
     @Column(nullable = false)
+    @JsonIgnore
     private String password;
 
     @NotNull(message = "El rol es obligatorio")
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Rol rol;
+
+    private Boolean disponible;
+
+    private Double capacidadVehiculoKg;
+
+    private String vehiculo;
+
+    private String placaVehiculo;
 
     public Long getId() {
         return id;
@@ -71,5 +81,37 @@ public class Usuario {
 
     public void setRol(Rol rol) {
         this.rol = rol;
+    }
+
+    public Boolean getDisponible() {
+        return disponible;
+    }
+
+    public void setDisponible(Boolean disponible) {
+        this.disponible = disponible;
+    }
+
+    public Double getCapacidadVehiculoKg() {
+        return capacidadVehiculoKg;
+    }
+
+    public void setCapacidadVehiculoKg(Double capacidadVehiculoKg) {
+        this.capacidadVehiculoKg = capacidadVehiculoKg;
+    }
+
+    public String getVehiculo() {
+        return vehiculo;
+    }
+
+    public void setVehiculo(String vehiculo) {
+        this.vehiculo = vehiculo;
+    }
+
+    public String getPlacaVehiculo() {
+        return placaVehiculo;
+    }
+
+    public void setPlacaVehiculo(String placaVehiculo) {
+        this.placaVehiculo = placaVehiculo;
     }
 }

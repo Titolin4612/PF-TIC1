@@ -5,6 +5,9 @@ export interface GeoStop {
   label: string;
   subLabel?: string;
   prioritario?: boolean;
+  peso?: number | null;
+  fragil?: boolean | null;
+  tiempoEstimadoMinutos?: number | null;
 }
 
 function haversineKm(a: GeoStop, b: GeoStop): number {

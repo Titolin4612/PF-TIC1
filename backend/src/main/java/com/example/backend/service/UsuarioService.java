@@ -11,6 +11,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.example.backend.entity.Usuario;
+import com.example.backend.entity.Rol;
 import com.example.backend.repository.UsuarioRepository;
 
 @Service
@@ -29,6 +30,7 @@ public class UsuarioService implements UserDetailsService {
             throw new IllegalArgumentException("Ya existe un usuario con ese email");
         }
 
+        prepararPerfilOperativo(usuario);
         usuario.setPassword(passwordEncoder.encode(usuario.getPassword()));
         return usuarioRepository.save(usuario);
     }
@@ -38,6 +40,40 @@ public class UsuarioService implements UserDetailsService {
                 .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado"));
     }
 
+    public List<Usuario> listarRepartidores() {
+        return usuarioRepository.findByRol(Rol.REPARTIDOR);
+    }
+
+    public Usuario actualizarPerfilRepartidor(
+            String email,
+            Boolean disponible,
+            Double capacidadVehiculoKg,
+            String vehiculo,
+            String placaVehiculo) {
+        Usuario repartidor = buscarPorEmail(email.trim().toLowerCase());
+        if (repartidor.getRol() != Rol.REPARTIDOR) {
+            throw new IllegalArgumentException("El usuario seleccionado no tiene rol de repartidor");
+        }
+
+        if (disponible != null) {
+            repartidor.setDisponible(disponible);
+        }
+        if (capacidadVehiculoKg != null) {
+            if (capacidadVehiculoKg <= 0) {
+                throw new IllegalArgumentException("La capacidad del vehiculo debe ser mayor que 0");
+            }
+            repartidor.setCapacidadVehiculoKg(capacidadVehiculoKg);
+        }
+        if (vehiculo != null) {
+            repartidor.setVehiculo(vehiculo.trim());
+        }
+        if (placaVehiculo != null) {
+            repartidor.setPlacaVehiculo(placaVehiculo.trim().toUpperCase());
+        }
+
+        return usuarioRepository.save(repartidor);
+    }
+
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         Usuario usuario = buscarPorEmail(username);
@@ -45,5 +81,29 @@ public class UsuarioService implements UserDetailsService {
                 usuario.getEmail(),
                 usuario.getPassword(),
                 List.of(new SimpleGrantedAuthority("ROLE_" + usuario.getRol().name())));
+    }
+
+    private void prepararPerfilOperativo(Usuario usuario) {
+        if (usuario.getEmail() != null) {
+            usuario.setEmail(usuario.getEmail().trim().toLowerCase());
+        }
+
+        if (usuario.getRol() != Rol.REPARTIDOR) {
+            usuario.setDisponible(null);
+            usuario.setCapacidadVehiculoKg(null);
+            usuario.setVehiculo(null);
+            usuario.setPlacaVehiculo(null);
+            return;
+        }
+
+        if (usuario.getDisponible() == null) {
+            usuario.setDisponible(true);
+        }
+        if (usuario.getCapacidadVehiculoKg() == null || usuario.getCapacidadVehiculoKg() <= 0) {
+            usuario.setCapacidadVehiculoKg(25.0);
+        }
+        if (usuario.getVehiculo() == null || usuario.getVehiculo().isBlank()) {
+            usuario.setVehiculo("Moto");
+        }
     }
 }
