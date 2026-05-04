@@ -13,6 +13,7 @@ function googleMapsUrl(lat: number, lng: number): string {
 interface RouteMapProps {
   stops: GeoStop[];
   route?: GeoStop[];
+  routeGeometry?: [number, number][];
   activeStopId?: number;
   height?: string;
 }
@@ -20,6 +21,7 @@ interface RouteMapProps {
 export function RouteMap({
   stops,
   route,
+  routeGeometry,
   activeStopId,
   height = "400px"
 }: RouteMapProps) {
@@ -93,7 +95,13 @@ export function RouteMap({
 
     layerGroup.clearLayers();
 
-    if (routeLine.length > 1) {
+    if (routeGeometry && routeGeometry.length > 1) {
+      L.polyline(routeGeometry, {
+        color: "#2563eb",
+        weight: 4,
+        opacity: 0.8,
+      }).addTo(layerGroup);
+    } else if (routeLine.length > 1) {
       const latLngs = routeLine.map((s) => [s.lat, s.lng] as [number, number]);
       L.polyline(latLngs, {
         color: "#2563eb",
@@ -135,7 +143,7 @@ export function RouteMap({
 
     // Needed when parent layout changes size after render.
     window.requestAnimationFrame(() => map.invalidateSize());
-  }, [routeLine, activeStopId]);
+  }, [routeLine, routeGeometry, activeStopId]);
 
   return (
     <div

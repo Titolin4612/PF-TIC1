@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { MapErrorBoundary } from "../../components/MapErrorBoundary";
 import { PedidoStatusBadge } from "../../components/PedidoStatusBadge";
 import { RouteMap } from "../../components/RouteMap";
 import { useGeocodedPedidos } from "../../hooks/useGeocodedPedidos";
@@ -23,7 +24,8 @@ import {
   getDriverSuccessMessage,
   isDriverActionablePedido,
 } from "../../utils/driverPresentation";
-import { nearestNeighborTSP } from "../../utils/tsp";
+import { nearestNeighborTSP, type GeoStop } from "../../utils/tsp";
+import { optimizeRoute } from "../../api/routeApi";
 import { useDriverPedidos } from "./useDriverPedidos";
 
 const getDriverRoutePath = (pedidoId: number): string =>
@@ -65,7 +67,36 @@ export const DriverRoutePage = () => {
 
   const pedidosMemo = useMemo(() => pedidos, [pedidos]);
   const { stops, geocoding } = useGeocodedPedidos(pedidosMemo);
-  const optimizedStops = stops.length > 1 ? nearestNeighborTSP(stops) : stops;
+  const [optimizedStops, setOptimizedStops] = useState<GeoStop[]>([]);
+  const [driverRouteGeometry, setDriverRouteGeometry] = useState<[number, number][] | null>(null);
+
+  useEffect(() => {
+    if (geocoding || stops.length === 0) {
+      setOptimizedStops([]);
+      setDriverRouteGeometry(null);
+      return;
+    }
+    if (stops.length === 1) {
+      setOptimizedStops(stops);
+      setDriverRouteGeometry(null);
+      return;
+    }
+    optimizeRoute(stops)
+      .then((response) => {
+        if (response?.stops?.length) {
+          setOptimizedStops(response.stops);
+          setDriverRouteGeometry((response.routeGeometry as [number, number][] | null) ?? null);
+        } else {
+          setOptimizedStops(nearestNeighborTSP(stops));
+          setDriverRouteGeometry(null);
+        }
+      })
+      .catch(() => {
+        setOptimizedStops(nearestNeighborTSP(stops));
+        setDriverRouteGeometry(null);
+      });
+  }, [geocoding, stops]);
+
   const activeStopId = selectedPedido
     ? stops.find((s) => s.id === selectedPedido.id)?.id
     : undefined;
@@ -136,12 +167,15 @@ export const DriverRoutePage = () => {
             )}
           </div>
           {stops.length > 0 ? (
-            <RouteMap
-              stops={stops}
-              route={optimizedStops}
-              activeStopId={activeStopId}
-              height="340px"
-            />
+            <MapErrorBoundary height="340px">
+              <RouteMap
+                stops={stops}
+                route={optimizedStops}
+                routeGeometry={driverRouteGeometry ?? undefined}
+                activeStopId={activeStopId}
+                height="340px"
+              />
+            </MapErrorBoundary>
           ) : geocoding ? (
             <div className="skeleton-row" style={{ height: "340px" }} />
           ) : (

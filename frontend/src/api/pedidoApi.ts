@@ -18,7 +18,10 @@ export type {
 const API_URL = "/api/pedidos";
 
 export const obtenerPedidos = async (): Promise<Pedido[]> => {
-  return apiFetch<Pedido[]>(API_URL, { auth: true });
+  return apiFetch<Pedido[]>(API_URL, {
+    auth: true,
+    skipAuthResetOn401: true,
+  });
 };
 
 export const obtenerPedido = async (id: number): Promise<Pedido> => {

@@ -30,6 +30,7 @@ export const DispatcherRoutesPage = () => {
   const { pedidos, loading, refreshing, error, refresh } = useDispatcherOrders();
   const [optimizedRoute, setOptimizedRoute] = useState<GeoStop[] | null>(null);
   const [routeDistanceKm, setRouteDistanceKm] = useState<number | null>(null);
+  const [routeGeometry, setRouteGeometry] = useState<[number, number][] | null>(null);
   const [routeError, setRouteError] = useState<string | null>(null);
   const [optimizing, setOptimizing] = useState(false);
   const activePedidos = useMemo(
@@ -64,6 +65,7 @@ export const DispatcherRoutesPage = () => {
       if (response?.stops?.length) {
         setOptimizedRoute(response.stops);
         setRouteDistanceKm(response.totalDistanceKm ?? null);
+        setRouteGeometry((response.routeGeometry as [number, number][] | null) ?? null);
         return;
       }
 
@@ -193,6 +195,7 @@ export const DispatcherRoutesPage = () => {
                 onClick={() => {
                   setOptimizedRoute(null);
                   setRouteDistanceKm(null);
+                  setRouteGeometry(null);
                   setRouteError(null);
                 }}
               >
@@ -217,6 +220,7 @@ export const DispatcherRoutesPage = () => {
               <RouteMap
                 stops={stops}
                 route={optimizedRoute ?? undefined}
+                routeGeometry={routeGeometry ?? undefined}
                 height="440px"
               />
             </MapErrorBoundary>
