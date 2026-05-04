@@ -57,6 +57,8 @@ export function useGeocodedPedidos(pedidos: Pedido[]): GeocodingState {
           peso: p.peso,
           fragil: p.fragil,
           tiempoEstimadoMinutos: p.tiempoEstimadoMinutos ?? null,
+          tamano: p.tamano,
+          zona: p.zona,
         };
       });
 

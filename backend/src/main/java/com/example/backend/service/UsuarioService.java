@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import com.example.backend.entity.Usuario;
 import com.example.backend.entity.Rol;
+import com.example.backend.dto.TipoVehiculo;
 import com.example.backend.repository.UsuarioRepository;
 
 @Service
@@ -48,6 +49,7 @@ public class UsuarioService implements UserDetailsService {
             String email,
             Boolean disponible,
             Double capacidadVehiculoKg,
+            TipoVehiculo tipoVehiculo,
             String vehiculo,
             String placaVehiculo) {
         Usuario repartidor = buscarPorEmail(email.trim().toLowerCase());
@@ -63,6 +65,10 @@ public class UsuarioService implements UserDetailsService {
                 throw new IllegalArgumentException("La capacidad del vehiculo debe ser mayor que 0");
             }
             repartidor.setCapacidadVehiculoKg(capacidadVehiculoKg);
+        }
+        if (tipoVehiculo != null) {
+            repartidor.setTipoVehiculo(tipoVehiculo);
+            aplicarDefaultsPorTipoVehiculo(repartidor, false);
         }
         if (vehiculo != null) {
             repartidor.setVehiculo(vehiculo.trim());
@@ -99,11 +105,19 @@ public class UsuarioService implements UserDetailsService {
         if (usuario.getDisponible() == null) {
             usuario.setDisponible(true);
         }
-        if (usuario.getCapacidadVehiculoKg() == null || usuario.getCapacidadVehiculoKg() <= 0) {
-            usuario.setCapacidadVehiculoKg(25.0);
+        if (usuario.getTipoVehiculo() == null) {
+            usuario.setTipoVehiculo(TipoVehiculo.MOTO);
+        }
+        aplicarDefaultsPorTipoVehiculo(usuario, true);
+    }
+
+    private void aplicarDefaultsPorTipoVehiculo(Usuario usuario, boolean completarCapacidad) {
+        TipoVehiculo tipo = usuario.getTipoVehiculo() == null ? TipoVehiculo.MOTO : usuario.getTipoVehiculo();
+        if (completarCapacidad && (usuario.getCapacidadVehiculoKg() == null || usuario.getCapacidadVehiculoKg() <= 0)) {
+            usuario.setCapacidadVehiculoKg(tipo == TipoVehiculo.MOTO ? 25.0 : 120.0);
         }
         if (usuario.getVehiculo() == null || usuario.getVehiculo().isBlank()) {
-            usuario.setVehiculo("Moto");
+            usuario.setVehiculo(tipo == TipoVehiculo.MOTO ? "Moto" : "Camion");
         }
     }
 }

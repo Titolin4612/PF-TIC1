@@ -4,6 +4,7 @@ export interface Repartidor {
   email: string;
   rol: "REPARTIDOR";
   disponible?: boolean | null;
+  tipoVehiculo?: "MOTO" | "CAMION" | null;
   capacidadVehiculoKg?: number | null;
   vehiculo?: string | null;
   placaVehiculo?: string | null;
@@ -11,6 +12,7 @@ export interface Repartidor {
 
 export interface RepartidorOperacionInput {
   disponible?: boolean | null;
+  tipoVehiculo?: "MOTO" | "CAMION" | null;
   capacidadVehiculoKg?: number | null;
   vehiculo?: string | null;
   placaVehiculo?: string | null;

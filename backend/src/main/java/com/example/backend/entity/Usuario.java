@@ -12,6 +12,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.example.backend.dto.TipoVehiculo;
 
 @Entity
 @Table(name = "usuario")
@@ -40,6 +41,9 @@ public class Usuario {
     private Rol rol;
 
     private Boolean disponible;
+
+    @Enumerated(EnumType.STRING)
+    private TipoVehiculo tipoVehiculo;
 
     private Double capacidadVehiculoKg;
 
@@ -89,6 +93,14 @@ public class Usuario {
 
     public void setDisponible(Boolean disponible) {
         this.disponible = disponible;
+    }
+
+    public TipoVehiculo getTipoVehiculo() {
+        return tipoVehiculo;
+    }
+
+    public void setTipoVehiculo(TipoVehiculo tipoVehiculo) {
+        this.tipoVehiculo = tipoVehiculo;
     }
 
     public Double getCapacidadVehiculoKg() {

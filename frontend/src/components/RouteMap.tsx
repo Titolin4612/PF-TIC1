@@ -45,18 +45,20 @@ export function RouteMap({
     [route, safeStops]
   );
 
-  if (safeStops.length === 0) {
-    return (
-      <div className="map-hint" style={{ height }}>
-        No hay coordenadas validas para mostrar en el mapa.
-      </div>
-    );
-  }
-
   const routeLine = safeRoute.length > 0 ? safeRoute : safeStops;
+  const safeRouteGeometry = useMemo(
+    () =>
+      (routeGeometry ?? []).filter(
+        ([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng)
+      ),
+    [routeGeometry]
+  );
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) {
+      return;
+    }
+    if (safeStops.length === 0) {
       return;
     }
 
@@ -82,9 +84,7 @@ export function RouteMap({
       mapRef.current?.remove();
       mapRef.current = null;
     };
-    // Intentionally run once per component lifecycle.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [safeStops]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -95,8 +95,8 @@ export function RouteMap({
 
     layerGroup.clearLayers();
 
-    if (routeGeometry && routeGeometry.length > 1) {
-      L.polyline(routeGeometry, {
+    if (safeRouteGeometry.length > 1) {
+      L.polyline(safeRouteGeometry, {
         color: "#2563eb",
         weight: 4,
         opacity: 0.8,
@@ -143,7 +143,15 @@ export function RouteMap({
 
     // Needed when parent layout changes size after render.
     window.requestAnimationFrame(() => map.invalidateSize());
-  }, [routeLine, routeGeometry, activeStopId]);
+  }, [routeLine, safeRouteGeometry, activeStopId]);
+
+  if (safeStops.length === 0) {
+    return (
+      <div className="map-hint" style={{ height }}>
+        No hay coordenadas validas para mostrar en el mapa.
+      </div>
+    );
+  }
 
   return (
     <div

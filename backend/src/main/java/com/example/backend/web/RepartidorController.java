@@ -1,6 +1,7 @@
 package com.example.backend.web;
 
 import com.example.backend.entity.Usuario;
+import com.example.backend.dto.TipoVehiculo;
 import com.example.backend.service.UsuarioService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,6 +38,7 @@ public class RepartidorController {
                 email,
                 request.disponible(),
                 request.capacidadVehiculoKg(),
+                request.tipoVehiculo(),
                 request.vehiculo(),
                 request.placaVehiculo());
     }
@@ -44,6 +46,7 @@ public class RepartidorController {
     public record ActualizarOperacionRepartidorRequest(
             Boolean disponible,
             Double capacidadVehiculoKg,
+            TipoVehiculo tipoVehiculo,
             String vehiculo,
             String placaVehiculo) {
     }

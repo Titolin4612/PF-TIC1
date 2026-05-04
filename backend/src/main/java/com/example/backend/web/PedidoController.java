@@ -11,7 +11,9 @@ import org.springframework.http.HttpStatus;
 
 import com.example.backend.entity.EstadoPedido;
 import com.example.backend.entity.Pedido;
+import com.example.backend.dto.RutasOptimizadasResponse;
 import com.example.backend.service.PedidoService;
+import com.example.backend.service.RutaOptimizacionService;
 
 import jakarta.validation.Valid;
 
@@ -24,9 +26,11 @@ public class PedidoController {
     private static final Set<String> ROLES_CLIENTE = Set.of("ROLE_CLIENTE");
 
     private final PedidoService pedidoService;
+    private final RutaOptimizacionService rutaOptimizacionService;
 
-    public PedidoController(PedidoService pedidoService) {
+    public PedidoController(PedidoService pedidoService, RutaOptimizacionService rutaOptimizacionService) {
         this.pedidoService = pedidoService;
+        this.rutaOptimizacionService = rutaOptimizacionService;
     }
 
     @PostMapping
@@ -105,6 +109,14 @@ public class PedidoController {
                     .toList();
         }
         return List.of();
+    }
+
+    @GetMapping("/rutas/optimizadas")
+    public RutasOptimizadasResponse generarRutasOptimizadas(Authentication authentication) {
+        if (!tieneRol(authentication, ROLES_GERENTE)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Solo gerencia puede optimizar rutas");
+        }
+        return rutaOptimizacionService.generarRutasOptimizadas();
     }
 
     @PutMapping("/{id}/asignar")

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError } from "../../api/apiFetch";
+import { obtenerRutasOptimizadas } from "../../api/pedidoApi";
 import { obtenerRepartidores } from "../../api/repartidorApi";
 import { optimizeRoute } from "../../api/routeApi";
 import { MetricCard } from "../../components/MetricCard";
@@ -24,7 +25,13 @@ import {
   getPriorityLabel,
   getRepartidorLabel,
 } from "../../utils/pedidoPresentation";
-import { nearestNeighborTSP, totalDistanceKm, type GeoStop } from "../../utils/tsp";
+import {
+  nearestNeighborTSP,
+  optimizeMultiVehicleRoutes,
+  totalDistanceKm,
+  type GeoStop,
+  type RutasOptimizadas,
+} from "../../utils/tsp";
 import type { Repartidor } from "../../types/repartidor";
 import { DispatcherEmptyState } from "./components/DispatcherEmptyState";
 import { useDispatcherOrders } from "./useDispatcherOrders";
@@ -32,6 +39,7 @@ import { useDispatcherOrders } from "./useDispatcherOrders";
 export const DispatcherRoutesPage = () => {
   const { pedidos, loading, refreshing, error, refresh } = useDispatcherOrders();
   const [optimizedRoute, setOptimizedRoute] = useState<GeoStop[] | null>(null);
+  const [optimizedRoutes, setOptimizedRoutes] = useState<RutasOptimizadas | null>(null);
   const [routeDistanceKm, setRouteDistanceKm] = useState<number | null>(null);
   const [routeGeometry, setRouteGeometry] = useState<[number, number][] | null>(null);
   const [routeError, setRouteError] = useState<string | null>(null);
@@ -72,6 +80,7 @@ export const DispatcherRoutesPage = () => {
           label: repartidor.nombre || repartidor.email,
           disponible: repartidor.disponible ?? true,
           capacidadVehiculoKg: repartidor.capacidadVehiculoKg ?? null,
+          tipoVehiculo: repartidor.tipoVehiculo ?? null,
           vehiculo: repartidor.vehiculo ?? "Vehiculo",
           placaVehiculo: repartidor.placaVehiculo ?? null,
           cargaKg: 0,
@@ -94,6 +103,7 @@ export const DispatcherRoutesPage = () => {
             label: getRepartidorLabel(pedido.repartidorEmail),
             disponible: true,
             capacidadVehiculoKg: null,
+            tipoVehiculo: null,
             vehiculo: "Sin ficha",
             placaVehiculo: null,
             cargaKg: 0,
@@ -148,6 +158,9 @@ export const DispatcherRoutesPage = () => {
   const routeDistance = optimizedRoute
     ? (routeDistanceKm ?? totalDistanceKm(optimizedRoute))
     : null;
+  const totalMultiRouteDistance = optimizedRoutes
+    ? optimizedRoutes.rutas.reduce((sum, route) => sum + route.distanciaEstimada, 0).toFixed(1)
+    : null;
 
   const handleOptimize = async () => {
     if (!stops.length) return;
@@ -156,23 +169,49 @@ export const DispatcherRoutesPage = () => {
     setOptimizing(true);
 
     try {
-      const response = await optimizeRoute(stops);
+      const [response, multiVehicleResponse] = await Promise.all([
+        optimizeRoute(stops),
+        obtenerRutasOptimizadas(),
+      ]);
 
       if (response?.stops?.length) {
         setOptimizedRoute(response.stops);
         setRouteDistanceKm(response.totalDistanceKm ?? null);
         setRouteGeometry((response.routeGeometry as [number, number][] | null) ?? null);
-        return;
+      } else {
+        const fallback = nearestNeighborTSP(stops);
+        setOptimizedRoute(fallback);
+        setRouteDistanceKm(totalDistanceKm(fallback));
       }
 
-      const fallback = nearestNeighborTSP(stops);
-      setOptimizedRoute(fallback);
-      setRouteDistanceKm(totalDistanceKm(fallback));
-      setRouteError("No se pudo obtener una ruta del servidor. Se uso optimizacion local.");
+      const stopsByPedidoId = new Map(stops.map((stop) => [stop.id, stop]));
+      setOptimizedRoutes({
+        base: multiVehicleResponse.base,
+        rutas: multiVehicleResponse.rutas.map((ruta) => ({
+          ...ruta,
+          pedidosAsignados: ruta.pedidosAsignados.map((pedido): GeoStop => {
+            const stop = stopsByPedidoId.get(pedido.id);
+            return {
+              id: pedido.id,
+              lat: stop?.lat ?? 0,
+              lng: stop?.lng ?? 0,
+              label: pedido.direccionEntrega,
+              subLabel: stop?.subLabel ?? `#${pedido.id} - ${pedido.zona ?? "Sin zona"}`,
+              prioritario: pedido.prioritario,
+              peso: pedido.peso,
+              fragil: pedido.fragil,
+              tiempoEstimadoMinutos: pedido.tiempoEstimadoMinutos ?? null,
+              tamano: pedido.tamano,
+              zona: pedido.zona,
+            };
+          }),
+        })),
+      });
     } catch (requestError) {
       const fallback = nearestNeighborTSP(stops);
       setOptimizedRoute(fallback);
       setRouteDistanceKm(totalDistanceKm(fallback));
+      setOptimizedRoutes(optimizeMultiVehicleRoutes(stops));
 
       if (requestError instanceof ApiError) {
         if (requestError.status === 401) {
@@ -299,6 +338,7 @@ export const DispatcherRoutesPage = () => {
                   setOptimizedRoute(null);
                   setRouteDistanceKm(null);
                   setRouteGeometry(null);
+                  setOptimizedRoutes(null);
                   setRouteError(null);
                 }}
               >
@@ -334,6 +374,15 @@ export const DispatcherRoutesPage = () => {
                   <span className="eyebrow">Ruta optimizada · vecino mas cercano</span>
                   <strong>{optimizedRoute.length} paradas · {routeDistance} km estimados</strong>
                 </div>
+                {optimizedRoutes ? (
+                  <div className="data-note">
+                    <p className="eyebrow">Plan multi-vehiculo</p>
+                    <strong>
+                      Base {optimizedRoutes.base} - {optimizedRoutes.rutas.length} vehiculos - {totalMultiRouteDistance} km
+                    </strong>
+                    <span>Separacion por moto/camion, capacidad y repartidores disponibles.</span>
+                  </div>
+                ) : null}
                 <ol className="route-result__list">
                   {optimizedRoute.map((stop, i) => (
                     <li key={stop.id} className="route-result__item">
@@ -348,6 +397,44 @@ export const DispatcherRoutesPage = () => {
                     </li>
                   ))}
                 </ol>
+                {optimizedRoutes ? (
+                  <div className="route-result__list">
+                    {optimizedRoutes.rutas.map((ruta) => (
+                      <section
+                        key={`${ruta.tipo}-${ruta.vehiculo}-${ruta.repartidor ?? "sin-repartidor"}`}
+                        className="route-result__vehicle"
+                      >
+                        <div className="route-result__summary">
+                          <span className="eyebrow">
+                            {ruta.vehiculo} - {ruta.tipo} - capacidad {ruta.capacidadMaxima} pedidos
+                          </span>
+                          <strong>
+                            {ruta.pedidosAsignados.length} pedidos - {ruta.distanciaEstimada} km - {(ruta.cargaKg ?? 0).toFixed(1)} kg
+                          </strong>
+                          <span className="summary-list__meta">
+                            Repartidor: {ruta.repartidor ?? "Sin asignar"}
+                          </span>
+                        </div>
+                        <ol className="route-plan">
+                          {ruta.pedidosAsignados.map((stop, index) => (
+                            <li key={stop.id} className="route-result__item">
+                              <span className="route-plan__rank">{index + 1}</span>
+                              <div>
+                                <p className="summary-list__title">
+                                  {stop.label}
+                                  {stop.prioritario ? <span className="priority-chip"> Prioritario</span> : null}
+                                </p>
+                                <p className="summary-list__meta">
+                                  {stop.subLabel} - {stop.tamano ?? "Sin tamano"} - {stop.peso ?? "?"} kg
+                                </p>
+                              </div>
+                            </li>
+                          ))}
+                        </ol>
+                      </section>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             )}
 
@@ -437,7 +524,9 @@ export const DispatcherRoutesPage = () => {
                       <td>
                         <div className="table-cell">
                           <p className="table-cell__primary">{summary.vehiculo}</p>
-                          <p className="table-cell__secondary">{summary.placaVehiculo ?? "Sin placa"}</p>
+                          <p className="table-cell__secondary">
+                            {summary.tipoVehiculo ?? "Sin tipo"} - {summary.placaVehiculo ?? "Sin placa"}
+                          </p>
                         </div>
                       </td>
                     </tr>

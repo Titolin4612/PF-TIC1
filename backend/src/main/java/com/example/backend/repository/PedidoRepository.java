@@ -11,6 +11,8 @@ public interface PedidoRepository extends JpaRepository<Pedido, Long> {
 
     List<Pedido> findByEstado(EstadoPedido estado);
 
+    List<Pedido> findByEstadoIn(Collection<EstadoPedido> estados);
+
     List<Pedido> findByClienteEmail(String clienteEmail);
 
     List<Pedido> findByClienteEmailOrClienteEmailIsNull(String clienteEmail);
