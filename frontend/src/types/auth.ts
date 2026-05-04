@@ -1,6 +1,8 @@
 export const USER_ROLES = ["CLIENTE", "REPARTIDOR", "GERENTE"] as const;
+export const VEHICLE_TYPES = ["MOTO", "CAMION"] as const;
 
 export type UserRole = (typeof USER_ROLES)[number];
+export type VehicleType = (typeof VEHICLE_TYPES)[number];
 
 export interface AuthSession {
   token: string;
@@ -16,6 +18,7 @@ export interface LoginPayload {
 export interface RegisterPayload extends LoginPayload {
   nombre: string;
   rol: UserRole;
+  tipoVehiculo?: VehicleType | null;
 }
 
 const isNonEmptyString = (value: unknown): value is string =>

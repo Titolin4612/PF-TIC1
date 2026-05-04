@@ -4,7 +4,7 @@ import { Link, Navigate, useNavigate } from "react-router-dom";
 import { getAuthErrorMessage } from "../../auth/authErrorMessages";
 import { useAuth } from "../../auth/useAuth";
 import { APP_ROUTES } from "../../router/paths";
-import type { UserRole } from "../../types/auth";
+import type { UserRole, VehicleType } from "../../types/auth";
 import { getDefaultRouteByRole, ROLE_LABELS } from "../../utils/roleRedirect";
 
 const PUBLIC_REGISTER_ROLES: UserRole[] = ["CLIENTE", "GERENTE", "REPARTIDOR"];
@@ -16,6 +16,7 @@ export const RegisterPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rol, setRol] = useState<UserRole>("CLIENTE");
+  const [tipoVehiculo, setTipoVehiculo] = useState<VehicleType>("MOTO");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,7 +30,13 @@ export const RegisterPage = () => {
     setError(null);
 
     try {
-      const nextSession = await register({ nombre, email, password, rol });
+      const nextSession = await register({
+        nombre,
+        email,
+        password,
+        rol,
+        tipoVehiculo: rol === "REPARTIDOR" ? tipoVehiculo : null,
+      });
       navigate(getDefaultRouteByRole(nextSession.rol), { replace: true });
     } catch (requestError) {
       setError(getAuthErrorMessage("register", requestError));
@@ -96,6 +103,20 @@ export const RegisterPage = () => {
             ))}
           </select>
         </div>
+
+        {rol === "REPARTIDOR" ? (
+          <div className="form__row">
+            <label htmlFor="register-vehicle">Tipo de vehiculo</label>
+            <select
+              id="register-vehicle"
+              value={tipoVehiculo}
+              onChange={(event) => setTipoVehiculo(event.target.value as VehicleType)}
+            >
+              <option value="MOTO">Moto</option>
+              <option value="CAMION">Camion</option>
+            </select>
+          </div>
+        ) : null}
 
         {error && <div className="alert alert--error">{error}</div>}
 

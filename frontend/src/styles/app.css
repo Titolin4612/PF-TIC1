@@ -243,6 +243,7 @@ p {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 16px;
   padding: 18px 28px;
   background: #ffffffea;
@@ -250,7 +251,7 @@ p {
   backdrop-filter: blur(6px);
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 1000;
 }
 
 .topbar--driver {
@@ -290,6 +291,9 @@ p {
   gap: 8px;
   align-items: center;
   flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .nav__item {
@@ -1835,6 +1839,22 @@ select:focus {
   .driver-pulse,
   .driver-detail-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1280px) {
+  .topbar {
+    align-items: flex-start;
+    padding: 14px 18px;
+  }
+
+  .nav {
+    order: 3;
+    width: 100%;
+  }
+
+  .topbar__actions {
+    margin-left: auto;
   }
 }
 

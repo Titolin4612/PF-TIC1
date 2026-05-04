@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { MetricCard } from "../../components/MetricCard";
 import { PedidoStatusBadge } from "../../components/PedidoStatusBadge";
-import { RouteMap } from "../../components/RouteMap";
+import { obtenerRutasOptimizadas } from "../../api/pedidoApi";
 import { useGeocodedPedidos } from "../../hooks/useGeocodedPedidos";
 import { APP_ROUTES } from "../../router/paths";
 import {
@@ -19,13 +19,13 @@ import {
   getDispatcherActionLabel,
   getPriorityLabel,
 } from "../../utils/pedidoPresentation";
-import { nearestNeighborTSP, totalDistanceKm, type GeoStop } from "../../utils/tsp";
+import { optimizeMultiVehicleRoutes, type GeoStop, type RutasOptimizadas } from "../../utils/tsp";
 import { DispatcherEmptyState } from "./components/DispatcherEmptyState";
 import { useDispatcherOrders } from "./useDispatcherOrders";
 
 export const DispatcherRoutesPage = () => {
   const { pedidos, loading, refreshing, error, refresh } = useDispatcherOrders();
-  const [optimizedRoute, setOptimizedRoute] = useState<GeoStop[] | null>(null);
+  const [optimizedRoutes, setOptimizedRoutes] = useState<RutasOptimizadas | null>(null);
   const activePedidos = useMemo(
     () => pedidos.filter((p) => p.estado !== "ENTREGADO" && p.estado !== "CANCELADO"),
     [pedidos]
@@ -42,11 +42,45 @@ export const DispatcherRoutesPage = () => {
   const waitingForAssignment = allUnassignedPedidos.length;
 
   const { stops, geocoding, progress, total } = useGeocodedPedidos(activePedidos);
-  const routeDistance = optimizedRoute ? totalDistanceKm(optimizedRoute) : null;
+  const totalRouteDistance = optimizedRoutes
+    ? optimizedRoutes.rutas.reduce((sum, route) => sum + route.distanciaEstimada, 0).toFixed(1)
+    : null;
 
-  const handleOptimize = () => {
-    if (!stops.length) return;
-    setOptimizedRoute(nearestNeighborTSP(stops));
+  const handleOptimize = async () => {
+    if (!activePedidos.length) return;
+
+    try {
+      const response = await obtenerRutasOptimizadas();
+      const stopsByPedidoId = new Map(stops.map((stop) => [stop.id, stop]));
+      setOptimizedRoutes({
+        base: response.base,
+        rutas: response.rutas.map((ruta) => ({
+          ...ruta,
+          pedidosAsignados: ruta.pedidosAsignados.map((pedido): GeoStop => {
+            const stop = stopsByPedidoId.get(pedido.id);
+            if (stop) {
+              return stop;
+            }
+
+            return {
+              id: pedido.id,
+              lat: 0,
+              lng: 0,
+              label: pedido.direccionEntrega,
+              subLabel: `#${pedido.id} - ${pedido.zona ?? "Sin zona"}`,
+              prioritario: pedido.prioritario,
+              tamano: pedido.tamano,
+              peso: pedido.peso,
+              zona: pedido.zona,
+            };
+          }),
+        })),
+      });
+    } catch {
+      if (stops.length) {
+        setOptimizedRoutes(optimizeMultiVehicleRoutes(stops));
+      }
+    }
   };
   const zonesWithBacklog = zoneSummaries.filter((summary) => summary.pendientes > 0).length;
   const topZone = topZones[0];
@@ -137,16 +171,16 @@ export const DispatcherRoutesPage = () => {
             <button
               type="button"
               className="button primary"
-              disabled={geocoding || stops.length === 0}
-              onClick={handleOptimize}
+              disabled={geocoding || activePedidos.length === 0}
+              onClick={() => void handleOptimize()}
             >
               {geocoding ? "Cargando mapa..." : "Calcular ruta optima"}
             </button>
-            {optimizedRoute && (
+            {optimizedRoutes && (
               <button
                 type="button"
                 className="button ghost"
-                onClick={() => setOptimizedRoute(null)}
+                onClick={() => setOptimizedRoutes(null)}
               >
                 Limpiar ruta
               </button>
@@ -165,42 +199,61 @@ export const DispatcherRoutesPage = () => {
           />
         ) : (
           <>
-            <RouteMap
-              stops={stops}
-              route={optimizedRoute ?? undefined}
-              height="440px"
-            />
+            <div className="alert alert--error">
+              Mapa desactivado temporalmente para la exposicion. La optimizacion de ruta sigue activa.
+            </div>
 
-            {optimizedRoute && (
+            {optimizedRoutes && (
               <div className="route-result">
                 <div className="route-result__summary">
-                  <span className="eyebrow">Ruta optimizada · vecino mas cercano</span>
-                  <strong>{optimizedRoute.length} paradas · {routeDistance} km estimados</strong>
+                  <span className="eyebrow">Rutas multi-vehiculo - vecino mas cercano</span>
+                  <strong>
+                    Base {optimizedRoutes.base} - {optimizedRoutes.rutas.length} vehiculos - {totalRouteDistance} km estimados
+                  </strong>
                 </div>
-                <ol className="route-result__list">
-                  {optimizedRoute.map((stop, i) => (
-                    <li key={stop.id} className="route-result__item">
-                      <span className="route-plan__rank">{i + 1}</span>
-                      <div>
-                        <p className="summary-list__title">
-                          {stop.label}
-                          {stop.prioritario ? <span className="priority-chip"> ⚡ Prioritario</span> : null}
-                        </p>
-                        <p className="summary-list__meta">{stop.subLabel}</p>
+                <div className="route-result__list">
+                  {optimizedRoutes.rutas.map((ruta) => (
+                    <section key={ruta.vehiculo} className="route-result__vehicle">
+                      <div className="route-result__summary">
+                        <span className="eyebrow">
+                          {ruta.vehiculo} - {ruta.tipo} - capacidad {ruta.capacidadMaxima}
+                        </span>
+                        <strong>
+                          {ruta.pedidosAsignados.length} pedidos - {ruta.distanciaEstimada} km
+                        </strong>
+                        <span className="summary-list__meta">
+                          Repartidor: {ruta.repartidor ?? "Sin asignar"}
+                        </span>
                       </div>
-                    </li>
+                      <ol className="route-plan">
+                        {ruta.pedidosAsignados.map((stop, i) => (
+                          <li key={stop.id} className="route-result__item">
+                            <span className="route-plan__rank">{i + 1}</span>
+                            <div>
+                              <p className="summary-list__title">
+                                {stop.label}
+                                {stop.prioritario ? <span className="priority-chip"> Prioritario</span> : null}
+                              </p>
+                              <p className="summary-list__meta">
+                                {stop.subLabel} - {stop.tamano ?? "Sin tamano"} - {stop.peso ?? "?"} kg
+                              </p>
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    </section>
                   ))}
-                </ol>
+                </div>
               </div>
             )}
 
-            {!optimizedRoute && stops.length > 0 && (
+            {!optimizedRoutes && stops.length > 0 && (
               <p className="map-hint">
                 {stops.length} de {activePedidos.length} pedidos geocodificados.
                 {activePedidos.length > stops.length
                   ? ` (${activePedidos.length - stops.length} sin coordenadas)`
                   : ""}
-                {" "}Presiona "Calcular ruta optima" para ordenar las paradas por el algoritmo del viajero.
+                {" "}Presiona "Calcular ruta optima" para separar motos/camiones y ordenar cada ruta desde la base.
               </p>
             )}
           </>

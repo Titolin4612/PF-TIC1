@@ -12,6 +12,8 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
+import com.example.backend.dto.TipoVehiculo;
+
 @Entity
 @Table(name = "usuario")
 public class Usuario {
@@ -36,6 +38,9 @@ public class Usuario {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Rol rol;
+
+    @Enumerated(EnumType.STRING)
+    private TipoVehiculo tipoVehiculo;
 
     public Long getId() {
         return id;
@@ -71,5 +76,13 @@ public class Usuario {
 
     public void setRol(Rol rol) {
         this.rol = rol;
+    }
+
+    public TipoVehiculo getTipoVehiculo() {
+        return tipoVehiculo;
+    }
+
+    public void setTipoVehiculo(TipoVehiculo tipoVehiculo) {
+        this.tipoVehiculo = tipoVehiculo;
     }
 }

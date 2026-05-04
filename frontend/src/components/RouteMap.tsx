@@ -2,7 +2,7 @@ import L from "leaflet";
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   MapContainer,
   Marker,
@@ -76,16 +76,28 @@ interface RouteMapProps {
   height?: string;
 }
 
+function isValidCoordinate(value: number): boolean {
+  return Number.isFinite(value);
+}
+
+function isValidStop(stop: GeoStop): boolean {
+  return isValidCoordinate(stop.lat) && isValidCoordinate(stop.lng);
+}
+
 export function RouteMap({
   stops,
   route,
   activeStopId,
   height = "400px",
 }: RouteMapProps) {
-  const center: [number, number] =
-    stops.length > 0 ? [stops[0].lat, stops[0].lng] : [6.2442, -75.5812];
+  const validStops = useMemo(() => stops.filter(isValidStop), [stops]);
+  const validRoute = useMemo(() => {
+    const base = route ?? validStops;
+    return base.filter(isValidStop);
+  }, [route, validStops]);
 
-  const routeLine = route ?? stops;
+  const center: [number, number] =
+    validStops.length > 0 ? [validStops[0].lat, validStops[0].lng] : [6.2442, -75.5812];
 
   return (
     <MapContainer
@@ -99,21 +111,20 @@ export function RouteMap({
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
 
-      <FitBounds stops={stops} />
+      <FitBounds stops={validStops} />
 
-      {routeLine.length > 1 && (
+      {validRoute.length > 1 && (
         <Polyline
-          positions={routeLine.map((s) => [s.lat, s.lng])}
+          positions={validRoute.map((s) => [s.lat, s.lng])}
           pathOptions={{ color: "#3b82f6", weight: 3, dashArray: "6 4" }}
         />
       )}
 
-      {stops.map((stop, index) => {
+      {validStops.map((stop, index) => {
         const isActive = stop.id === activeStopId;
         const icon = isActive ? activeIcon : stop.prioritario ? priorityIcon : undefined;
-        const stopNumber = route
-          ? route.findIndex((s) => s.id === stop.id) + 1
-          : index + 1;
+        const routeIndex = route ? validRoute.findIndex((s) => s.id === stop.id) : -1;
+        const stopNumber = routeIndex >= 0 ? routeIndex + 1 : index + 1;
 
         return (
           <Marker key={stop.id} position={[stop.lat, stop.lng]} icon={icon}>

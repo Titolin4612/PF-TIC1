@@ -4,6 +4,7 @@ import type {
   Pedido,
   PedidoInput,
   PedidoUpdateInput,
+  RutasOptimizadasPedido,
 } from "../types/pedido";
 
 export type {
@@ -13,12 +14,17 @@ export type {
   PedidoUpdateInput,
   TipoCobro,
   TipoTamano,
+  TipoVehiculo,
 } from "../types/pedido";
 
 const API_URL = "/api/pedidos";
 
 export const obtenerPedidos = async (): Promise<Pedido[]> => {
   return apiFetch<Pedido[]>(API_URL, { auth: true });
+};
+
+export const obtenerRutasOptimizadas = async (): Promise<RutasOptimizadasPedido> => {
+  return apiFetch<RutasOptimizadasPedido>(`${API_URL}/rutas/optimizadas`, { auth: true });
 };
 
 export const obtenerPedido = async (id: number): Promise<Pedido> => {

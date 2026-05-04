@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { PedidoStatusBadge } from "../../components/PedidoStatusBadge";
-import { RouteMap } from "../../components/RouteMap";
 import { useGeocodedPedidos } from "../../hooks/useGeocodedPedidos";
 import { APP_ROUTES } from "../../router/paths";
 import type { EstadoPedido } from "../../types/pedido";
@@ -46,6 +45,30 @@ export const DriverRoutePage = () => {
     pedidoId: number;
     message: string;
   } | null>(null);
+  const activePedidos = useMemo(
+    () => pedidos.filter((pedido) => pedido.estado !== "ENTREGADO" && pedido.estado !== "CANCELADO"),
+    [pedidos]
+  );
+  const { stops, geocoding } = useGeocodedPedidos(activePedidos);
+  const optimizedStops = useMemo(
+    () => (stops.length > 1 ? nearestNeighborTSP(stops) : stops),
+    [stops]
+  );
+  const optimizedPedidoIds = useMemo(() => optimizedStops.map((stop) => stop.id), [optimizedStops]);
+  const optimizedPedidos = useMemo(() => {
+    const byId = new Map(pedidos.map((pedido) => [pedido.id, pedido]));
+    const optimized = optimizedPedidoIds
+      .map((id) => byId.get(id))
+      .filter((pedido): pedido is (typeof pedidos)[number] => pedido !== undefined);
+
+    const remainingActive = activePedidos.filter((pedido) => !optimizedPedidoIds.includes(pedido.id));
+    const closedPedidos = pedidos.filter(
+      (pedido) => pedido.estado === "ENTREGADO" || pedido.estado === "CANCELADO"
+    );
+
+    return [...optimized, ...remainingActive, ...closedPedidos];
+  }, [activePedidos, optimizedPedidoIds, pedidos]);
+
   const requestedPedidoId = parsePedidoId(searchParams.get("pedido"));
   const requestedPedido =
     requestedPedidoId === null
@@ -57,18 +80,11 @@ export const DriverRoutePage = () => {
   const nextActionablePedido =
     selectedPedido === null
       ? null
-      : pedidos.find(
+      : optimizedPedidos.find(
           (pedido) => pedido.id !== selectedPedido.id && isDriverActionablePedido(pedido)
         ) ?? null;
   const visibleFeedback =
     selectedPedido && feedback?.pedidoId === selectedPedido.id ? feedback.message : null;
-
-  const pedidosMemo = useMemo(() => pedidos, [pedidos]);
-  const { stops, geocoding } = useGeocodedPedidos(pedidosMemo);
-  const optimizedStops = stops.length > 1 ? nearestNeighborTSP(stops) : stops;
-  const activeStopId = selectedPedido
-    ? stops.find((s) => s.id === selectedPedido.id)?.id
-    : undefined;
 
   useEffect(() => {
     if (!selectedPedido) {
@@ -128,25 +144,15 @@ export const DriverRoutePage = () => {
         <article className="card">
           <div className="card__header card__header--split">
             <div>
-              <p className="eyebrow">Ruta optimizada · TSP</p>
+              <p className="eyebrow">Ruta optimizada - TSP</p>
               <h2>Mis paradas en el mapa</h2>
             </div>
-            {geocoding && (
-              <span className="geocoding-status">Geocodificando paradas...</span>
+            {geocoding ? (
+              <span className="geocoding-status">Actualizando orden optimizado...</span>
+            ) : (
+              <span className="placeholder-badge">{optimizedStops.length} paradas optimizadas</span>
             )}
           </div>
-          {stops.length > 0 ? (
-            <RouteMap
-              stops={stops}
-              route={optimizedStops}
-              activeStopId={activeStopId}
-              height="340px"
-            />
-          ) : geocoding ? (
-            <div className="skeleton-row" style={{ height: "340px" }} />
-          ) : (
-            <p className="map-hint">No se pudieron geocodificar las direcciones.</p>
-          )}
         </article>
       )}
 
@@ -325,7 +331,7 @@ export const DriverRoutePage = () => {
             </div>
           ) : (
             <div className="driver-route-queue__list">
-              {pedidos.map((pedido) => {
+              {optimizedPedidos.map((pedido) => {
                 const isSelected = selectedPedido?.id === pedido.id;
 
                 return (
@@ -355,3 +361,4 @@ export const DriverRoutePage = () => {
     </section>
   );
 };
+
