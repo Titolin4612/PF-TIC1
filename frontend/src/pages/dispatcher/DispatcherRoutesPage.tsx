@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError } from "../../api/apiFetch";
+import { obtenerRepartidores } from "../../api/repartidorApi";
 import { optimizeRoute } from "../../api/routeApi";
 import { MetricCard } from "../../components/MetricCard";
 import { MapErrorBoundary } from "../../components/MapErrorBoundary";
@@ -21,8 +22,10 @@ import {
   getClienteLabel,
   getDispatcherActionLabel,
   getPriorityLabel,
+  getRepartidorLabel,
 } from "../../utils/pedidoPresentation";
 import { nearestNeighborTSP, totalDistanceKm, type GeoStop } from "../../utils/tsp";
+import type { Repartidor } from "../../types/repartidor";
 import { DispatcherEmptyState } from "./components/DispatcherEmptyState";
 import { useDispatcherOrders } from "./useDispatcherOrders";
 
@@ -32,6 +35,8 @@ export const DispatcherRoutesPage = () => {
   const [routeDistanceKm, setRouteDistanceKm] = useState<number | null>(null);
   const [routeGeometry, setRouteGeometry] = useState<[number, number][] | null>(null);
   const [routeError, setRouteError] = useState<string | null>(null);
+  const [fleetError, setFleetError] = useState<string | null>(null);
+  const [repartidores, setRepartidores] = useState<Repartidor[]>([]);
   const [optimizing, setOptimizing] = useState(false);
   const activePedidos = useMemo(
     () => pedidos.filter((p) => p.estado !== "ENTREGADO" && p.estado !== "CANCELADO"),
@@ -47,6 +52,97 @@ export const DispatcherRoutesPage = () => {
   const activeCourierCount = courierRows.length;
   const topZones = zoneSummaries.slice(0, 6);
   const waitingForAssignment = allUnassignedPedidos.length;
+  const delayedPedidos = activePedidos.filter((pedido) => pedido.alertaRetraso);
+  const estimatedPedidos = activePedidos.filter((pedido) => pedido.tiempoEstimadoMinutos);
+  const avgEstimatedMinutes =
+    estimatedPedidos.length > 0
+      ? Math.round(
+          estimatedPedidos.reduce(
+            (totalMinutes, pedido) => totalMinutes + (pedido.tiempoEstimadoMinutos ?? 0),
+            0
+          ) / estimatedPedidos.length
+        )
+      : 0;
+  const fleetRows = useMemo(() => {
+    const rowsByEmail = new Map(
+      repartidores.map((repartidor) => [
+        repartidor.email.toLowerCase(),
+        {
+          email: repartidor.email,
+          label: repartidor.nombre || repartidor.email,
+          disponible: repartidor.disponible ?? true,
+          capacidadVehiculoKg: repartidor.capacidadVehiculoKg ?? null,
+          vehiculo: repartidor.vehiculo ?? "Vehiculo",
+          placaVehiculo: repartidor.placaVehiculo ?? null,
+          cargaKg: 0,
+          pedidos: 0,
+          enCamino: 0,
+          alertas: 0,
+          zonas: new Set<string>(),
+        },
+      ])
+    );
+
+    activePedidos
+      .filter((pedido) => pedido.repartidorEmail)
+      .forEach((pedido) => {
+        const email = pedido.repartidorEmail!.toLowerCase();
+        const row =
+          rowsByEmail.get(email) ??
+          {
+            email: pedido.repartidorEmail!,
+            label: getRepartidorLabel(pedido.repartidorEmail),
+            disponible: true,
+            capacidadVehiculoKg: null,
+            vehiculo: "Sin ficha",
+            placaVehiculo: null,
+            cargaKg: 0,
+            pedidos: 0,
+            enCamino: 0,
+            alertas: 0,
+            zonas: new Set<string>(),
+          };
+
+        row.cargaKg += pedido.peso ?? 0;
+        row.pedidos += 1;
+        row.enCamino += pedido.estado === "EN_CAMINO" ? 1 : 0;
+        row.alertas += pedido.alertaRetraso ? 1 : 0;
+        row.zonas.add(formatZona(pedido.zona));
+        rowsByEmail.set(email, row);
+      });
+
+    return [...rowsByEmail.values()].sort((left, right) => {
+      if (left.disponible !== right.disponible) {
+        return left.disponible ? -1 : 1;
+      }
+      return right.alertas - left.alertas || right.cargaKg - left.cargaKg || left.label.localeCompare(right.label);
+    });
+  }, [activePedidos, repartidores]);
+  const unavailableCount = fleetRows.filter((row) => !row.disponible).length;
+  const overloadedCount = fleetRows.filter(
+    (row) => row.capacidadVehiculoKg !== null && row.cargaKg > row.capacidadVehiculoKg
+  ).length;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    obtenerRepartidores()
+      .then((data) => {
+        if (!cancelled) {
+          setRepartidores(data);
+          setFleetError(null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setFleetError("No se pudo cargar la ficha de flota. Se muestra la carga por pedidos.");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const { stops, geocoding, progress, total } = useGeocodedPedidos(activePedidos);
   const routeDistance = optimizedRoute
@@ -162,9 +258,16 @@ export const DispatcherRoutesPage = () => {
           tone="warning"
         />
         <MetricCard
-          label="Prioritarios"
-          value={metrics.prioritarios}
-          helper="Atenciones que merecen foco"
+          label="Alertas SLA"
+          value={delayedPedidos.length}
+          helper={`${avgEstimatedMinutes} min promedio estimado`}
+          tone={delayedPedidos.length > 0 ? "warning" : "success"}
+        />
+        <MetricCard
+          label="Flota no disponible"
+          value={unavailableCount}
+          helper={overloadedCount > 0 ? `${overloadedCount} sobre capacidad` : "Capacidad bajo control"}
+          tone={unavailableCount > 0 || overloadedCount > 0 ? "warning" : "success"}
         />
       </section>
 
@@ -265,11 +368,13 @@ export const DispatcherRoutesPage = () => {
         <article className="card order-card">
           <div className="card__header card__header--split">
             <div>
-              <p className="eyebrow">Distribucion por repartidor</p>
-              <h2>Balance del reparto</h2>
+              <p className="eyebrow">Flota y capacidad</p>
+              <h2>Balance operativo por repartidor</h2>
             </div>
-            <span className="placeholder-badge">{courierRows.length} repartidores</span>
+            <span className="placeholder-badge">{fleetRows.length} repartidores</span>
           </div>
+
+          {fleetError ? <div className="alert alert--error">{fleetError}</div> : null}
 
           {loading ? (
             <div className="skeleton-table">
@@ -277,7 +382,7 @@ export const DispatcherRoutesPage = () => {
               <div className="skeleton-row" />
               <div className="skeleton-row" />
             </div>
-          ) : courierRows.length === 0 ? (
+          ) : fleetRows.length === 0 ? (
             <DispatcherEmptyState
               title="Sin salida activa para coordinar"
               body="Esta mesa organiza la carga abierta por repartidor y deja visibles los frentes que exigen movimiento."
@@ -288,31 +393,56 @@ export const DispatcherRoutesPage = () => {
                 <thead>
                   <tr>
                     <th>Repartidor</th>
-                    <th>Por atender</th>
+                    <th>Disponibilidad</th>
+                    <th>Carga</th>
                     <th>En camino</th>
-                    <th className="is-optional">Prioritarios</th>
+                    <th className="is-optional">Alertas</th>
                     <th className="is-optional">Zonas</th>
-                    <th>Total</th>
+                    <th>Vehiculo</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {courierRows.map((summary) => (
-                    <tr key={summary.label}>
+                  {fleetRows.map((summary) => {
+                    const capacityLabel =
+                      summary.capacidadVehiculoKg !== null
+                        ? `${summary.cargaKg.toFixed(1)} / ${summary.capacidadVehiculoKg} kg`
+                        : `${summary.cargaKg.toFixed(1)} kg`;
+                    const isOverCapacity =
+                      summary.capacidadVehiculoKg !== null &&
+                      summary.cargaKg > summary.capacidadVehiculoKg;
+
+                    return (
+                    <tr key={summary.email}>
                       <td>
                         <div className="table-cell">
                           <p className="table-cell__primary">{summary.label}</p>
                           <p className="table-cell__secondary">
-                            {summary.pendientes} pendientes - {summary.enCamino} en calle
+                            {summary.pedidos} pedidos activos
                           </p>
                         </div>
                       </td>
-                      <td>{summary.pendientes}</td>
+                      <td>
+                        <span className={summary.disponible ? "info-pill" : "info-pill info-pill--muted"}>
+                          {summary.disponible ? "Disponible" : "No disponible"}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={isOverCapacity ? "priority-chip" : undefined}>
+                          {capacityLabel}
+                        </span>
+                      </td>
                       <td>{summary.enCamino}</td>
-                      <td className="is-optional">{summary.prioritarios}</td>
-                      <td className="is-optional">{summary.zonas}</td>
-                      <td>{summary.total}</td>
+                      <td className="is-optional">{summary.alertas}</td>
+                      <td className="is-optional">{summary.zonas.size}</td>
+                      <td>
+                        <div className="table-cell">
+                          <p className="table-cell__primary">{summary.vehiculo}</p>
+                          <p className="table-cell__secondary">{summary.placaVehiculo ?? "Sin placa"}</p>
+                        </div>
+                      </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -358,12 +488,12 @@ export const DispatcherRoutesPage = () => {
 
                 <div className="summary-list__item">
                   <div>
-                    <p className="summary-list__title">Entregas en calle</p>
+                    <p className="summary-list__title">Alertas SLA</p>
                     <p className="summary-list__meta">
-                      Pedidos actualmente en recorrido.
+                      Rutas fuera del tiempo estimado.
                     </p>
                   </div>
-                  <span className="summary-list__value">{metrics.enCamino}</span>
+                  <span className="summary-list__value">{delayedPedidos.length}</span>
                 </div>
 
                 <div className="summary-list__item">
