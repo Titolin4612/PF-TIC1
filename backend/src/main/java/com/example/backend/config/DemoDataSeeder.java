@@ -62,11 +62,7 @@ public class DemoDataSeeder implements CommandLineRunner {
             Double capacidadVehiculoKg,
             String vehiculo,
             String placaVehiculo) {
-        if (usuarioRepository.existsByEmail(email)) {
-            return;
-        }
-
-        Usuario usuario = new Usuario();
+        Usuario usuario = usuarioRepository.findByEmail(email).orElseGet(Usuario::new);
         usuario.setNombre(nombre);
         usuario.setEmail(email);
         usuario.setPassword(passwordEncoder.encode("Demo1234"));

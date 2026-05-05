@@ -24,7 +24,7 @@ server:
 
 app:
   cors:
-    allowed-origins: http://localhost:5173
+    allowed-origins: http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,http://127.0.0.1:5173,http://127.0.0.1:5174,http://127.0.0.1:5175,http://127.0.0.1:5176
   jwt:
     secret: 4f8d7b0f6bba4a6aa9a91ce2f0875b8f4f8d7b0f6bba4a6aa9a91ce2f0875b8f
     expiration-ms: 86400000
