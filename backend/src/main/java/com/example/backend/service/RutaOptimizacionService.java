@@ -1,5 +1,6 @@
 package com.example.backend.service;
 
+import com.example.backend.dto.GeoStopRequest;
 import com.example.backend.dto.RutaVehiculoResponse;
 import com.example.backend.dto.RutasOptimizadasResponse;
 import com.example.backend.dto.TipoVehiculo;
@@ -13,6 +14,7 @@ import com.example.backend.repository.UsuarioRepository;
 import org.springframework.stereotype.Service;
 
 import java.text.Normalizer;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -97,6 +99,14 @@ public class RutaOptimizacionService {
         rutas.addAll(crearRespuestas(motos, repartidoresMoto));
         rutas.addAll(crearRespuestas(camiones, repartidoresCamion));
 
+        List<Pedido> pedidosAsignados = rutas.stream()
+                .filter(ruta -> ruta.repartidor() != null)
+                .flatMap(ruta -> ruta.pedidosAsignados().stream())
+                .toList();
+        if (!pedidosAsignados.isEmpty()) {
+            pedidoRepository.saveAll(pedidosAsignados);
+        }
+
         return new RutasOptimizadasResponse(BASE_DIRECCION, rutas);
     }
 
@@ -140,12 +150,14 @@ public class RutaOptimizacionService {
             VehiculoRuta vehiculo = vehiculos.get(i);
             Usuario repartidor = i < repartidores.size() ? repartidores.get(i) : null;
             List<Pedido> pedidosOrdenados = ordenarPorVecinoMasCercano(vehiculo.pedidos);
+            asignarRepartidorSiExiste(pedidosOrdenados, repartidor);
             String nombreVehiculo = repartidor != null && repartidor.getVehiculo() != null && !repartidor.getVehiculo().isBlank()
                     ? repartidor.getVehiculo()
                     : vehiculo.nombre();
             double capacidadKg = repartidor != null && repartidor.getCapacidadVehiculoKg() != null
                     ? repartidor.getCapacidadVehiculoKg()
                     : vehiculo.capacidadKg;
+            List<GeoStopRequest> paradas = crearParadas(pedidosOrdenados);
 
             respuestas.add(new RutaVehiculoResponse(
                     nombreVehiculo,
@@ -155,10 +167,59 @@ public class RutaOptimizacionService {
                     capacidadKg,
                     vehiculo.cargaKg(),
                     pedidosOrdenados,
+                    paradas,
+                    crearGeometry(paradas),
                     calcularDistanciaEstimada(pedidosOrdenados)));
         }
 
         return respuestas;
+    }
+
+    private void asignarRepartidorSiExiste(List<Pedido> pedidos, Usuario repartidor) {
+        if (repartidor == null) {
+            return;
+        }
+
+        LocalDateTime fechaAsignacion = LocalDateTime.now();
+        for (Pedido pedido : pedidos) {
+            pedido.setRepartidorEmail(repartidor.getEmail());
+            if (pedido.getFechaAsignacion() == null) {
+                pedido.setFechaAsignacion(fechaAsignacion);
+            }
+            pedido.setAlertaRetraso(false);
+            pedido.setMotivoAlerta(null);
+        }
+    }
+
+    private List<GeoStopRequest> crearParadas(List<Pedido> pedidosOrdenados) {
+        return pedidosOrdenados.stream()
+                .map(pedido -> {
+                    GeoPoint coordenadas = coordenadasEstimacionPedido(pedido);
+                    return new GeoStopRequest(
+                            pedido.getId(),
+                            coordenadas.lat(),
+                            coordenadas.lng(),
+                            pedido.getDireccionEntrega(),
+                            "#" + pedido.getId() + " - " + (pedido.getZona() == null ? "Sin zona" : pedido.getZona()),
+                            Boolean.TRUE.equals(pedido.getPrioritario()),
+                            pedido.getPeso(),
+                            pedido.getFragil(),
+                            pedido.getTiempoEstimadoMinutos());
+                })
+                .toList();
+    }
+
+    private List<double[]> crearGeometry(List<GeoStopRequest> paradas) {
+        if (paradas.isEmpty()) {
+            return List.of();
+        }
+
+        List<double[]> geometry = new ArrayList<>();
+        geometry.add(new double[]{BASE_COORDENADAS.lat(), BASE_COORDENADAS.lng()});
+        for (GeoStopRequest parada : paradas) {
+            geometry.add(new double[]{parada.lat(), parada.lng()});
+        }
+        return geometry;
     }
 
     private List<Pedido> ordenarPorVecinoMasCercano(List<Pedido> pedidos) {
@@ -275,7 +336,7 @@ public class RutaOptimizacionService {
     private GeoPoint desplazamientoDeterministico(String semilla) {
         int hash = semilla == null ? 0 : semilla.hashCode();
         double angulo = Math.toRadians(Math.floorMod(hash, 360));
-        double radio = 0.006 + (Math.floorMod(hash, 1000) / 1000.0) * 0.018;
+        double radio = 0.0015 + (Math.floorMod(hash, 1000) / 1000.0) * 0.0045;
 
         return new GeoPoint(Math.cos(angulo) * radio, Math.sin(angulo) * radio);
     }
@@ -291,7 +352,14 @@ public class RutaOptimizacionService {
 
         String sinAcentos = Normalizer.normalize(texto, Normalizer.Form.NFD)
                 .replaceAll("\\p{M}", "");
-        return sinAcentos.trim().toLowerCase(Locale.ROOT);
+        return sinAcentos.trim()
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("\\b(\\d+)\\s*a\\s+sur\\b", "$1 sur")
+                .replaceAll("\\b(\\d+)a\\s+sur\\b", "$1 sur")
+                .replaceAll("\\b(\\d+)\\s*a\\s+norte\\b", "$1 norte")
+                .replaceAll("\\b(\\d+)a\\s+norte\\b", "$1 norte")
+                .replaceAll("\\s+a\\s+", " ")
+                .replaceAll("\\s+", " ");
     }
 
     private double distanciaKm(GeoPoint a, GeoPoint b) {

@@ -14,14 +14,22 @@ interface RouteMapProps {
   stops: GeoStop[];
   route?: GeoStop[];
   routeGeometry?: [number, number][];
+  routeGroups?: Array<{
+    stops: GeoStop[];
+    routeGeometry?: [number, number][];
+    color?: string;
+  }>;
   activeStopId?: number;
   height?: string;
 }
+
+const ROUTE_COLORS = ["#2563eb", "#16a34a", "#f59e0b", "#dc2626", "#7c3aed", "#0891b2"];
 
 export function RouteMap({
   stops,
   route,
   routeGeometry,
+  routeGroups,
   activeStopId,
   height = "400px"
 }: RouteMapProps) {
@@ -46,6 +54,21 @@ export function RouteMap({
   );
 
   const routeLine = safeRoute.length > 0 ? safeRoute : safeStops;
+  const safeRouteGroups = useMemo(
+    () =>
+      (routeGroups ?? [])
+        .map((group, index) => ({
+          color: group.color ?? ROUTE_COLORS[index % ROUTE_COLORS.length],
+          stops: group.stops.filter(
+            (stop) => Number.isFinite(stop.lat) && Number.isFinite(stop.lng)
+          ),
+          routeGeometry: (group.routeGeometry ?? []).filter(
+            ([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng)
+          ),
+        }))
+        .filter((group) => group.stops.length > 0),
+    [routeGroups]
+  );
   const safeRouteGeometry = useMemo(
     () =>
       (routeGeometry ?? []).filter(
@@ -95,7 +118,26 @@ export function RouteMap({
 
     layerGroup.clearLayers();
 
-    if (safeRouteGeometry.length > 1) {
+    if (safeRouteGroups.length > 0) {
+      safeRouteGroups.forEach((group) => {
+        if (group.routeGeometry.length > 1) {
+          L.polyline(group.routeGeometry, {
+            color: group.color,
+            weight: 4,
+            opacity: 0.82,
+          }).addTo(layerGroup);
+          return;
+        }
+
+        if (group.stops.length > 1) {
+          L.polyline(group.stops.map((s) => [s.lat, s.lng] as [number, number]), {
+            color: group.color,
+            weight: 4,
+            opacity: 0.82,
+          }).addTo(layerGroup);
+        }
+      });
+    } else if (safeRouteGeometry.length > 1) {
       L.polyline(safeRouteGeometry, {
         color: "#2563eb",
         weight: 4,
@@ -110,7 +152,10 @@ export function RouteMap({
       }).addTo(layerGroup);
     }
 
-    routeLine.forEach((stop, index) => {
+    const markerStops =
+      safeRouteGroups.length > 0 ? safeRouteGroups.flatMap((group) => group.stops) : routeLine;
+
+    markerStops.forEach((stop, index) => {
       const isActive = stop.id === activeStopId;
       const color = isActive ? "#0f172a" : stop.prioritario ? "#f59e0b" : "#2563eb";
 
@@ -136,14 +181,15 @@ export function RouteMap({
       marker.bindPopup(popup);
     });
 
-    const bounds = L.latLngBounds(routeLine.map((s) => [s.lat, s.lng] as [number, number]));
+    const boundsStops = markerStops.length > 0 ? markerStops : routeLine;
+    const bounds = L.latLngBounds(boundsStops.map((s) => [s.lat, s.lng] as [number, number]));
     if (bounds.isValid()) {
       map.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
     }
 
     // Needed when parent layout changes size after render.
     window.requestAnimationFrame(() => map.invalidateSize());
-  }, [routeLine, safeRouteGeometry, activeStopId]);
+  }, [routeLine, safeRouteGeometry, safeRouteGroups, activeStopId]);
 
   if (safeStops.length === 0) {
     return (

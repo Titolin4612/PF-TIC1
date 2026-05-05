@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Pedido } from "../types/pedido";
-import { geocodeMany } from "../utils/geocoding";
+import { geocodeMany, normalizeAddressForGeocoding } from "../utils/geocoding";
 import type { GeoStop } from "../utils/tsp";
 
 export interface GeocodingState {
@@ -35,7 +35,7 @@ export function useGeocodedPedidos(pedidos: Pedido[]): GeocodingState {
     setProgress(0);
     setTotal(list.length);
 
-    const addresses = list.map((p) => p.direccionEntrega);
+    const addresses = list.map((p) => normalizeAddressForGeocoding(p.direccionEntrega));
 
     const coordMap = await geocodeMany(addresses, (done, tot) => {
       if (!abortRef.current) setProgress(done / tot);
@@ -44,9 +44,12 @@ export function useGeocodedPedidos(pedidos: Pedido[]): GeocodingState {
     if (abortRef.current) return;
 
     const result: GeoStop[] = list
-      .filter((p) => coordMap.has(p.direccionEntrega))
+      .filter((p) =>
+        coordMap.has(normalizeAddressForGeocoding(p.direccionEntrega))
+      )
       .map((p) => {
-        const [lat, lng] = coordMap.get(p.direccionEntrega)!;
+        const query = normalizeAddressForGeocoding(p.direccionEntrega);
+        const [lat, lng] = coordMap.get(query)!;
         return {
           id: p.id,
           lat,

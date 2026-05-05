@@ -12,5 +12,7 @@ public record RutaVehiculoResponse(
         double capacidadKg,
         double cargaKg,
         List<Pedido> pedidosAsignados,
+        List<GeoStopRequest> paradas,
+        List<double[]> routeGeometry,
         double distanciaEstimada) {
 }

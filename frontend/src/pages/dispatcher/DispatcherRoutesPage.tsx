@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { ApiError } from "../../api/apiFetch";
 import { obtenerRutasOptimizadas } from "../../api/pedidoApi";
 import { obtenerRepartidores } from "../../api/repartidorApi";
-import { optimizeRoute } from "../../api/routeApi";
 import { MetricCard } from "../../components/MetricCard";
 import { MapErrorBoundary } from "../../components/MapErrorBoundary";
 import { PedidoStatusBadge } from "../../components/PedidoStatusBadge";
@@ -40,8 +39,6 @@ export const DispatcherRoutesPage = () => {
   const { pedidos, loading, refreshing, error, refresh } = useDispatcherOrders();
   const [optimizedRoute, setOptimizedRoute] = useState<GeoStop[] | null>(null);
   const [optimizedRoutes, setOptimizedRoutes] = useState<RutasOptimizadas | null>(null);
-  const [routeDistanceKm, setRouteDistanceKm] = useState<number | null>(null);
-  const [routeGeometry, setRouteGeometry] = useState<[number, number][] | null>(null);
   const [routeError, setRouteError] = useState<string | null>(null);
   const [fleetError, setFleetError] = useState<string | null>(null);
   const [repartidores, setRepartidores] = useState<Repartidor[]>([]);
@@ -155,12 +152,18 @@ export const DispatcherRoutesPage = () => {
   }, []);
 
   const { stops, geocoding, progress, total } = useGeocodedPedidos(activePedidos);
-  const routeDistance = optimizedRoute
-    ? (routeDistanceKm ?? totalDistanceKm(optimizedRoute))
-    : null;
   const totalMultiRouteDistance = optimizedRoutes
     ? optimizedRoutes.rutas.reduce((sum, route) => sum + route.distanciaEstimada, 0).toFixed(1)
     : null;
+  const routeDistance = totalMultiRouteDistance ?? (optimizedRoute ? totalDistanceKm(optimizedRoute) : null);
+  const routeGroups = useMemo(
+    () =>
+      optimizedRoutes?.rutas.map((ruta) => ({
+        stops: ruta.pedidosAsignados,
+        routeGeometry: ruta.routeGeometry,
+      })) ?? [],
+    [optimizedRoutes]
+  );
 
   const handleOptimize = async () => {
     if (!stops.length) return;
@@ -169,34 +172,22 @@ export const DispatcherRoutesPage = () => {
     setOptimizing(true);
 
     try {
-      const [response, multiVehicleResponse] = await Promise.all([
-        optimizeRoute(stops),
-        obtenerRutasOptimizadas(),
-      ]);
-
-      if (response?.stops?.length) {
-        setOptimizedRoute(response.stops);
-        setRouteDistanceKm(response.totalDistanceKm ?? null);
-        setRouteGeometry((response.routeGeometry as [number, number][] | null) ?? null);
-      } else {
-        const fallback = nearestNeighborTSP(stops);
-        setOptimizedRoute(fallback);
-        setRouteDistanceKm(totalDistanceKm(fallback));
-      }
-
+      const multiVehicleResponse = await obtenerRutasOptimizadas();
       const stopsByPedidoId = new Map(stops.map((stop) => [stop.id, stop]));
-      setOptimizedRoutes({
+      const nextOptimizedRoutes: RutasOptimizadas = {
         base: multiVehicleResponse.base,
         rutas: multiVehicleResponse.rutas.map((ruta) => ({
           ...ruta,
-          pedidosAsignados: ruta.pedidosAsignados.map((pedido): GeoStop => {
+          routeGeometry: ruta.routeGeometry,
+          pedidosAsignados: ruta.pedidosAsignados.map((pedido, index): GeoStop => {
+            const parada = ruta.paradas?.find((item) => item.id === pedido.id) ?? ruta.paradas?.[index];
             const stop = stopsByPedidoId.get(pedido.id);
             return {
               id: pedido.id,
-              lat: stop?.lat ?? 0,
-              lng: stop?.lng ?? 0,
-              label: pedido.direccionEntrega,
-              subLabel: stop?.subLabel ?? `#${pedido.id} - ${pedido.zona ?? "Sin zona"}`,
+              lat: parada?.lat ?? stop?.lat ?? 0,
+              lng: parada?.lng ?? stop?.lng ?? 0,
+              label: parada?.label ?? pedido.direccionEntrega,
+              subLabel: parada?.subLabel ?? stop?.subLabel ?? `#${pedido.id} - ${pedido.zona ?? "Sin zona"}`,
               prioritario: pedido.prioritario,
               peso: pedido.peso,
               fragil: pedido.fragil,
@@ -206,11 +197,12 @@ export const DispatcherRoutesPage = () => {
             };
           }),
         })),
-      });
+      };
+      setOptimizedRoutes(nextOptimizedRoutes);
+      setOptimizedRoute(nextOptimizedRoutes.rutas.flatMap((ruta) => ruta.pedidosAsignados));
     } catch (requestError) {
       const fallback = nearestNeighborTSP(stops);
       setOptimizedRoute(fallback);
-      setRouteDistanceKm(totalDistanceKm(fallback));
       setOptimizedRoutes(optimizeMultiVehicleRoutes(stops));
 
       if (requestError instanceof ApiError) {
@@ -336,8 +328,6 @@ export const DispatcherRoutesPage = () => {
                 className="button ghost"
                 onClick={() => {
                   setOptimizedRoute(null);
-                  setRouteDistanceKm(null);
-                  setRouteGeometry(null);
                   setOptimizedRoutes(null);
                   setRouteError(null);
                 }}
@@ -363,7 +353,7 @@ export const DispatcherRoutesPage = () => {
               <RouteMap
                 stops={stops}
                 route={optimizedRoute ?? undefined}
-                routeGeometry={routeGeometry ?? undefined}
+                routeGroups={routeGroups}
                 height="440px"
               />
             </MapErrorBoundary>

@@ -22,6 +22,7 @@ export interface RutaVehiculo {
   capacidadKg?: number | null;
   cargaKg?: number | null;
   pedidosAsignados: GeoStop[];
+  routeGeometry?: [number, number][];
   distanciaEstimada: number;
 }
 

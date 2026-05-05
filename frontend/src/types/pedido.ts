@@ -11,6 +11,18 @@ export type TipoCobro = "CONTRA_ENTREGA" | "WEB" | "PAGO_WEB";
 export type EstadoPago = "PENDIENTE" | "PAGADO" | "FALLIDO";
 export type TipoVehiculo = "MOTO" | "CAMION";
 
+export interface RutaVehiculoParada {
+  id: number;
+  lat: number;
+  lng: number;
+  label: string;
+  subLabel?: string | null;
+  prioritario: boolean;
+  peso?: number | null;
+  fragil?: boolean | null;
+  tiempoEstimadoMinutos?: number | null;
+}
+
 export interface Pedido {
   id: number;
   direccionEntrega: string;
@@ -66,6 +78,8 @@ export interface RutaVehiculoPedido {
   capacidadKg: number;
   cargaKg: number;
   pedidosAsignados: Pedido[];
+  paradas?: RutaVehiculoParada[];
+  routeGeometry?: [number, number][];
   distanciaEstimada: number;
 }
 
