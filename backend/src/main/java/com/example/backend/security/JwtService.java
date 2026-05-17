@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import com.example.backend.entity.Usuario;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
@@ -48,8 +49,12 @@ public class JwtService {
     }
 
     public boolean esTokenValido(String token, UserDetails userDetails) {
-        String username = extraerUsername(token);
-        return username.equals(userDetails.getUsername()) && !estaExpirado(token);
+        try {
+            String username = extraerUsername(token);
+            return username.equals(userDetails.getUsername()) && !estaExpirado(token);
+        } catch (JwtException | IllegalArgumentException ex) {
+            return false;
+        }
     }
 
     private boolean estaExpirado(String token) {
