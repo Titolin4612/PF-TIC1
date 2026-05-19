@@ -31,6 +31,12 @@ import { useDriverPedidos } from "./useDriverPedidos";
 const getDriverRoutePath = (pedidoId: number): string =>
   `${APP_ROUTES.driverRoute}?pedido=${pedidoId}`;
 
+const getWazeUrl = (lat: number, lng: number): string =>
+  `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
+
+const getGoogleMapsUrl = (lat: number, lng: number): string =>
+  `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+
 const parsePedidoId = (value: string | null): number | null => {
   if (!value) {
     return null;
@@ -97,9 +103,23 @@ export const DriverRoutePage = () => {
       });
   }, [geocoding, stops]);
 
-  const activeStopId = selectedPedido
-    ? stops.find((s) => s.id === selectedPedido.id)?.id
-    : undefined;
+  const selectedStop = selectedPedido
+    ? stops.find((s) => s.id === selectedPedido.id) ?? null
+    : null;
+  const routeStops = optimizedStops.length > 0 ? optimizedStops : stops;
+  const currentRouteIndex = selectedPedido
+    ? routeStops.findIndex((stop) => stop.id === selectedPedido.id)
+    : -1;
+  const nextRoutePedido = currentRouteIndex >= 0
+    ? routeStops
+        .slice(currentRouteIndex + 1)
+        .map((stop) => pedidos.find((pedido) => pedido.id === stop.id) ?? null)
+        .find((pedido): pedido is NonNullable<typeof pedido> =>
+          Boolean(pedido && isDriverActionablePedido(pedido))
+        ) ?? null
+    : nextActionablePedido;
+  const navigationTarget = selectedStop ?? routeStops[0] ?? null;
+  const activeStopId = selectedStop?.id;
 
   useEffect(() => {
     if (!selectedPedido) {
@@ -300,6 +320,41 @@ export const DriverRoutePage = () => {
                         ? "Esta parada ya quedo cerrada. Abre la siguiente entrega para continuar el turno."
                         : "No tienes otra entrega activa en este momento.")}
                   </p>
+                </div>
+
+                <div className="driver-action-panel__buttons">
+                  {navigationTarget ? (
+                    <>
+                      <a
+                        className="button primary"
+                        href={getWazeUrl(navigationTarget.lat, navigationTarget.lng)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Abrir Waze
+                      </a>
+                      <a
+                        className="button ghost"
+                        href={getGoogleMapsUrl(navigationTarget.lat, navigationTarget.lng)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Abrir Google Maps
+                      </a>
+                    </>
+                  ) : null}
+                  {nextRoutePedido ? (
+                    <Link
+                      className="button ghost"
+                      to={getDriverRoutePath(nextRoutePedido.id)}
+                    >
+                      Siguiente parada
+                    </Link>
+                  ) : selectedActions.length === 0 ? (
+                    <Link className="button primary" to={APP_ROUTES.driverDeliveries}>
+                      Finalizar ruta
+                    </Link>
+                  ) : null}
                 </div>
 
                 {selectedActions.length > 0 ? (
