@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.backend.entity.Rol;
 import com.example.backend.entity.Usuario;
+import com.example.backend.dto.TipoVehiculo;
 import com.example.backend.security.JwtService;
 import com.example.backend.service.UsuarioService;
 
@@ -40,6 +41,7 @@ public class AuthController {
         usuario.setEmail(request.email());
         usuario.setPassword(request.password());
         usuario.setRol(request.rol());
+        usuario.setTipoVehiculo(request.tipoVehiculo());
 
         Usuario creado = usuarioService.registrar(usuario);
         String token = jwtService.generarToken(creado);
@@ -60,7 +62,8 @@ public class AuthController {
             @NotBlank String nombre,
             @Email @NotBlank String email,
             @NotBlank String password,
-            @NotNull Rol rol) {
+            @NotNull Rol rol,
+            TipoVehiculo tipoVehiculo) {
     }
 
     public record LoginRequest(

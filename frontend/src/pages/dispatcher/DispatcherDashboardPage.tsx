@@ -143,6 +143,12 @@ export const DispatcherDashboardPage = () => {
           tone="warning"
         />
         <MetricCard
+          label="Alertas SLA"
+          value={metrics.alertasRetraso}
+          helper="Rutas fuera del tiempo estimado"
+          tone={metrics.alertasRetraso > 0 ? "warning" : "success"}
+        />
+        <MetricCard
           label="Sin reparto"
           value={unassignedPedidos.length}
           helper="Conviene asignarlos pronto"
@@ -239,7 +245,11 @@ export const DispatcherDashboardPage = () => {
                       <td>
                         <PedidoStatusBadge estado={pedido.estado} />
                       </td>
-                      <td className="is-optional">{getDispatcherActionLabel(pedido)}</td>
+                      <td className="is-optional">
+                        {pedido.alertaRetraso
+                          ? pedido.motivoAlerta ?? "Ruta fuera de SLA"
+                          : getDispatcherActionLabel(pedido)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -369,7 +379,16 @@ export const DispatcherDashboardPage = () => {
                       <td>
                         <PedidoStatusBadge estado={pedido.estado} />
                       </td>
-                      <td>{getRepartidorLabel(pedido.repartidorEmail)}</td>
+                      <td>
+                        <div className="table-cell">
+                          <p className="table-cell__primary">{getRepartidorLabel(pedido.repartidorEmail)}</p>
+                          <p className="table-cell__secondary">
+                            {pedido.tiempoEstimadoMinutos
+                              ? `${pedido.tiempoEstimadoMinutos} min estimados`
+                              : "Sin SLA"}
+                          </p>
+                        </div>
+                      </td>
                       <td className="is-optional">{formatDateTime(pedido.fechaCreacion)}</td>
                     </tr>
                   ))}

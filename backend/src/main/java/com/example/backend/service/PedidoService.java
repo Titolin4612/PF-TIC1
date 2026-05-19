@@ -4,6 +4,8 @@ import java.util.Locale;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.time.Duration;
+import java.time.LocalDateTime;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -12,9 +14,12 @@ import org.springframework.stereotype.Service;
 import com.example.backend.entity.EstadoPago;
 import com.example.backend.entity.EstadoPedido;
 import com.example.backend.entity.Pedido;
+import com.example.backend.entity.Rol;
 import com.example.backend.entity.TipoTamano;
+import com.example.backend.entity.Usuario;
 import com.example.backend.exception.PedidoNoEncontradoException;
 import com.example.backend.repository.PedidoRepository;
+import com.example.backend.repository.UsuarioRepository;
 
 @Service
 public class PedidoService {
@@ -37,14 +42,23 @@ public class PedidoService {
 
     private static final double RECARGO_PRIORITARIO = 10000.0;
 
-    private final PedidoRepository pedidoRepository;
+    private static final Set<EstadoPedido> ESTADOS_CARGA_ACTIVA = Set.of(
+            EstadoPedido.CREADO,
+            EstadoPedido.EN_PREPARACION,
+            EstadoPedido.EN_CAMINO
+    );
 
-    public PedidoService(PedidoRepository pedidoRepository) {
+    private final PedidoRepository pedidoRepository;
+    private final UsuarioRepository usuarioRepository;
+
+    public PedidoService(PedidoRepository pedidoRepository, UsuarioRepository usuarioRepository) {
         this.pedidoRepository = pedidoRepository;
+        this.usuarioRepository = usuarioRepository;
     }
 
     public Pedido crearPedido(Pedido pedido) {
         validarPedidoYPrepararCosto(pedido);
+        prepararSeguimientoLogistico(pedido);
         pedido.setEstadoPago(EstadoPago.PENDIENTE);
         return pedidoRepository.save(pedido);
     }
@@ -52,6 +66,7 @@ public class PedidoService {
     public Pedido crearPedidoComoCliente(Pedido pedido, String clienteEmail) {
         pedido.setClienteEmail(normalizarEmail(clienteEmail));
         validarPedidoYPrepararCosto(pedido);
+        prepararSeguimientoLogistico(pedido);
         pedido.setEstadoPago(EstadoPago.PENDIENTE);
         return pedidoRepository.save(pedido);
     }
@@ -59,6 +74,7 @@ public class PedidoService {
     public Pedido crearPedidoPagadoDesdeStripe(Pedido pedido, String clienteEmail, String stripeSessionId) {
         pedido.setClienteEmail(normalizarEmail(clienteEmail));
         validarPedidoYPrepararCosto(pedido);
+        prepararSeguimientoLogistico(pedido);
         pedido.setEstadoPago(EstadoPago.PAGADO);
         pedido.setStripeSessionId(stripeSessionId);
         return pedidoRepository.save(pedido);
@@ -92,6 +108,7 @@ public class PedidoService {
             Pedido pedido = pedidoRepository.findById(id)
             .orElseThrow(() -> new PedidoNoEncontradoException("Pedido no encontrado con id: " + id));
             pedido.setEstado(nuevoEstado);
+        actualizarSeguimientoPorEstado(pedido, nuevoEstado);
         return pedidoRepository.save(pedido);
     }
     public Pedido actualizarPedido(Long id, Pedido pedidoActualizado) {
@@ -110,6 +127,9 @@ public class PedidoService {
         pedido.setPrioritario(pedidoActualizado.getPrioritario());
         pedido.setCostoDomicilio(pedidoActualizado.getCostoDomicilio());
         pedido.setRepartidorEmail(pedidoActualizado.getRepartidorEmail());
+        pedido.setTiempoEstimadoMinutos(pedidoActualizado.getTiempoEstimadoMinutos());
+        pedido.setAlertaRetraso(Boolean.TRUE.equals(pedidoActualizado.getAlertaRetraso()));
+        pedido.setMotivoAlerta(pedidoActualizado.getMotivoAlerta());
         if (pedido.getEstadoPago() == null) {
             pedido.setEstadoPago(EstadoPago.PENDIENTE);
         }
@@ -120,7 +140,16 @@ public class PedidoService {
     public Pedido asignarRepartidor(Long id, String repartidorEmail) {
         Pedido pedido = pedidoRepository.findById(id)
                 .orElseThrow(() -> new PedidoNoEncontradoException("Pedido no encontrado"));
-        pedido.setRepartidorEmail(repartidorEmail);
+        Usuario repartidor = validarRepartidorDisponible(repartidorEmail);
+        validarCapacidadDisponible(repartidor, pedido);
+
+        pedido.setRepartidorEmail(repartidor.getEmail());
+        pedido.setFechaAsignacion(LocalDateTime.now());
+        if (pedido.getTiempoEstimadoMinutos() == null || pedido.getTiempoEstimadoMinutos() <= 0) {
+            pedido.setTiempoEstimadoMinutos(calcularTiempoEstimadoMinutos(pedido));
+        }
+        pedido.setAlertaRetraso(false);
+        pedido.setMotivoAlerta(null);
         return pedidoRepository.save(pedido);
     }
     public void eliminarPedido(Long id) {
@@ -139,6 +168,112 @@ public class PedidoService {
         validarTamanoVsPeso(pedido.getTamano(), pedido.getPeso());
         validarTipoCobro(pedido);
         pedido.setCostoDomicilio(calcularCostoDomicilio(pedido.getZona(), pedido.getPrioritario()));
+    }
+
+    private void prepararSeguimientoLogistico(Pedido pedido) {
+        if (pedido.getEstado() == null) {
+            pedido.setEstado(EstadoPedido.CREADO);
+        }
+        if (pedido.getTiempoEstimadoMinutos() == null || pedido.getTiempoEstimadoMinutos() <= 0) {
+            pedido.setTiempoEstimadoMinutos(calcularTiempoEstimadoMinutos(pedido));
+        }
+        pedido.setAlertaRetraso(false);
+        pedido.setMotivoAlerta(null);
+    }
+
+    private void actualizarSeguimientoPorEstado(Pedido pedido, EstadoPedido nuevoEstado) {
+        if (nuevoEstado == EstadoPedido.ENTREGADO) {
+            pedido.setFechaEntrega(LocalDateTime.now());
+            evaluarAlertaRetraso(pedido);
+            return;
+        }
+
+        if (pedido.getFechaAsignacion() != null
+                && pedido.getTiempoEstimadoMinutos() != null
+                && LocalDateTime.now().isAfter(pedido.getFechaAsignacion().plusMinutes(pedido.getTiempoEstimadoMinutos()))) {
+            pedido.setAlertaRetraso(true);
+            pedido.setMotivoAlerta("La ruta supero el tiempo estimado de entrega");
+        }
+    }
+
+    private void evaluarAlertaRetraso(Pedido pedido) {
+        if (pedido.getFechaAsignacion() == null
+                || pedido.getFechaEntrega() == null
+                || pedido.getTiempoEstimadoMinutos() == null) {
+            pedido.setAlertaRetraso(false);
+            pedido.setMotivoAlerta(null);
+            return;
+        }
+
+        long minutosReales = Duration.between(pedido.getFechaAsignacion(), pedido.getFechaEntrega()).toMinutes();
+        if (minutosReales > pedido.getTiempoEstimadoMinutos()) {
+            pedido.setAlertaRetraso(true);
+            pedido.setMotivoAlerta("Entrega tardia: " + minutosReales + " min reales vs "
+                    + pedido.getTiempoEstimadoMinutos() + " min estimados");
+        } else {
+            pedido.setAlertaRetraso(false);
+            pedido.setMotivoAlerta(null);
+        }
+    }
+
+    private Usuario validarRepartidorDisponible(String repartidorEmail) {
+        String emailNormalizado = normalizarEmail(repartidorEmail);
+        Usuario repartidor = usuarioRepository.findByEmail(emailNormalizado)
+                .orElseThrow(() -> new IllegalArgumentException("Repartidor no encontrado"));
+
+        if (repartidor.getRol() != Rol.REPARTIDOR) {
+            throw new IllegalArgumentException("El usuario seleccionado no tiene rol de repartidor");
+        }
+        if (Boolean.FALSE.equals(repartidor.getDisponible())) {
+            throw new IllegalArgumentException("El repartidor no esta disponible en flota");
+        }
+        return repartidor;
+    }
+
+    private void validarCapacidadDisponible(Usuario repartidor, Pedido pedido) {
+        Double capacidad = repartidor.getCapacidadVehiculoKg();
+        if (capacidad == null || capacidad <= 0) {
+            return;
+        }
+
+        double cargaActiva = pedidoRepository
+                .findByRepartidorEmailAndEstadoIn(repartidor.getEmail(), ESTADOS_CARGA_ACTIVA)
+                .stream()
+                .filter(p -> !p.getId().equals(pedido.getId()))
+                .map(Pedido::getPeso)
+                .filter(peso -> peso != null && peso > 0)
+                .mapToDouble(Double::doubleValue)
+                .sum();
+        double pesoNuevo = pedido.getPeso() == null ? 0 : pedido.getPeso();
+
+        if (cargaActiva + pesoNuevo > capacidad) {
+            throw new IllegalArgumentException("Capacidad insuficiente. Carga activa: "
+                    + cargaActiva + " kg, pedido: " + pesoNuevo + " kg, capacidad: " + capacidad + " kg");
+        }
+    }
+
+    private int calcularTiempoEstimadoMinutos(Pedido pedido) {
+        String zona = pedido.getZona() == null ? "" : pedido.getZona().trim().toLowerCase(Locale.ROOT);
+        int base = switch (zona) {
+            case "medellin" -> 35;
+            case "itagui", "envigado" -> 45;
+            case "bello" -> 55;
+            case "sabaneta" -> 60;
+            default -> 50;
+        };
+
+        if (Boolean.TRUE.equals(pedido.getPrioritario())) {
+            base -= 10;
+        }
+        if (Boolean.TRUE.equals(pedido.getFragil())) {
+            base += 10;
+        }
+        if (pedido.getTamano() == TipoTamano.GRANDE) {
+            base += 15;
+        } else if (pedido.getTamano() == TipoTamano.MEDIANO) {
+            base += 5;
+        }
+        return Math.max(base, 20);
     }
 
     private void validarZona(String zona) {

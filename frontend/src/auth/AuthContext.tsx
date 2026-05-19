@@ -4,7 +4,7 @@ import { login as loginRequest, register as registerRequest } from "../api/authA
 import { clearStoredSession, loadStoredSession, saveStoredSession } from "./authStorage";
 import { registerUnauthorizedHandler } from "../api/apiFetch";
 import type { AuthSession } from "../types/auth";
-import { AuthContext, type AuthContextValue } from "./AuthContext";
+import { AuthContext, type AuthContextValue } from "./authContextDef";
 
 export const AuthProvider = ({ children }: PropsWithChildren) => {
   const [session, setSession] = useState<AuthSession | null>(() => loadStoredSession());

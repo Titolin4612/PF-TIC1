@@ -16,6 +16,7 @@ export interface LoginPayload {
 export interface RegisterPayload extends LoginPayload {
   nombre: string;
   rol: UserRole;
+  tipoVehiculo?: "MOTO" | "CAMION" | null;
 }
 
 const isNonEmptyString = (value: unknown): value is string =>

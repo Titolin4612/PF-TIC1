@@ -60,6 +60,18 @@ public class Pedido {
 
     private String repartidorEmail;
 
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime fechaAsignacion;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime fechaEntrega;
+
+    private Integer tiempoEstimadoMinutos;
+
+    private Boolean alertaRetraso;
+
+    private String motivoAlerta;
+
     @Column(unique = true)
     private String stripeSessionId;
 
@@ -169,6 +181,46 @@ public class Pedido {
 
     public void setRepartidorEmail(String repartidorEmail) {
         this.repartidorEmail = repartidorEmail;
+    }
+
+    public LocalDateTime getFechaAsignacion() {
+        return fechaAsignacion;
+    }
+
+    public void setFechaAsignacion(LocalDateTime fechaAsignacion) {
+        this.fechaAsignacion = fechaAsignacion;
+    }
+
+    public LocalDateTime getFechaEntrega() {
+        return fechaEntrega;
+    }
+
+    public void setFechaEntrega(LocalDateTime fechaEntrega) {
+        this.fechaEntrega = fechaEntrega;
+    }
+
+    public Integer getTiempoEstimadoMinutos() {
+        return tiempoEstimadoMinutos;
+    }
+
+    public void setTiempoEstimadoMinutos(Integer tiempoEstimadoMinutos) {
+        this.tiempoEstimadoMinutos = tiempoEstimadoMinutos;
+    }
+
+    public Boolean getAlertaRetraso() {
+        return alertaRetraso;
+    }
+
+    public void setAlertaRetraso(Boolean alertaRetraso) {
+        this.alertaRetraso = alertaRetraso;
+    }
+
+    public String getMotivoAlerta() {
+        return motivoAlerta;
+    }
+
+    public void setMotivoAlerta(String motivoAlerta) {
+        this.motivoAlerta = motivoAlerta;
     }
 
     public String getStripeSessionId() {

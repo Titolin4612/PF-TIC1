@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { MapErrorBoundary } from "../../components/MapErrorBoundary";
 import { PedidoStatusBadge } from "../../components/PedidoStatusBadge";
+import { RouteMap } from "../../components/RouteMap";
+import { useGeocodedPedidos } from "../../hooks/useGeocodedPedidos";
 import { APP_ROUTES } from "../../router/paths";
 import type { EstadoPedido } from "../../types/pedido";
 import {
@@ -21,10 +24,18 @@ import {
   getDriverSuccessMessage,
   isDriverActionablePedido,
 } from "../../utils/driverPresentation";
+import { nearestNeighborTSP, type GeoStop } from "../../utils/tsp";
+import { optimizeRoute } from "../../api/routeApi";
 import { useDriverPedidos } from "./useDriverPedidos";
 
 const getDriverRoutePath = (pedidoId: number): string =>
   `${APP_ROUTES.driverRoute}?pedido=${pedidoId}`;
+
+const getWazeUrl = (lat: number, lng: number): string =>
+  `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
+
+const getGoogleMapsUrl = (lat: number, lng: number): string =>
+  `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
 
 const parsePedidoId = (value: string | null): number | null => {
   if (!value) {
@@ -59,6 +70,56 @@ export const DriverRoutePage = () => {
         ) ?? null;
   const visibleFeedback =
     selectedPedido && feedback?.pedidoId === selectedPedido.id ? feedback.message : null;
+
+  const pedidosMemo = useMemo(() => pedidos, [pedidos]);
+  const { stops, geocoding } = useGeocodedPedidos(pedidosMemo);
+  const [optimizedStops, setOptimizedStops] = useState<GeoStop[]>([]);
+  const [driverRouteGeometry, setDriverRouteGeometry] = useState<[number, number][] | null>(null);
+
+  useEffect(() => {
+    if (geocoding || stops.length === 0) {
+      setOptimizedStops([]);
+      setDriverRouteGeometry(null);
+      return;
+    }
+    if (stops.length === 1) {
+      setOptimizedStops(stops);
+      setDriverRouteGeometry(null);
+      return;
+    }
+    optimizeRoute(stops)
+      .then((response) => {
+        if (response?.stops?.length) {
+          setOptimizedStops(response.stops);
+          setDriverRouteGeometry((response.routeGeometry as [number, number][] | null) ?? null);
+        } else {
+          setOptimizedStops(nearestNeighborTSP(stops));
+          setDriverRouteGeometry(null);
+        }
+      })
+      .catch(() => {
+        setOptimizedStops(nearestNeighborTSP(stops));
+        setDriverRouteGeometry(null);
+      });
+  }, [geocoding, stops]);
+
+  const selectedStop = selectedPedido
+    ? stops.find((s) => s.id === selectedPedido.id) ?? null
+    : null;
+  const routeStops = optimizedStops.length > 0 ? optimizedStops : stops;
+  const currentRouteIndex = selectedPedido
+    ? routeStops.findIndex((stop) => stop.id === selectedPedido.id)
+    : -1;
+  const nextRoutePedido = currentRouteIndex >= 0
+    ? routeStops
+        .slice(currentRouteIndex + 1)
+        .map((stop) => pedidos.find((pedido) => pedido.id === stop.id) ?? null)
+        .find((pedido): pedido is NonNullable<typeof pedido> =>
+          Boolean(pedido && isDriverActionablePedido(pedido))
+        ) ?? null
+    : nextActionablePedido;
+  const navigationTarget = selectedStop ?? routeStops[0] ?? null;
+  const activeStopId = selectedStop?.id;
 
   useEffect(() => {
     if (!selectedPedido) {
@@ -113,6 +174,35 @@ export const DriverRoutePage = () => {
 
       {error ? <div className="alert alert--error">{error}</div> : null}
       {visibleFeedback ? <div className="alert alert--success">{visibleFeedback}</div> : null}
+
+      {pedidos.length > 0 && (
+        <article className="card">
+          <div className="card__header card__header--split">
+            <div>
+              <p className="eyebrow">Ruta optimizada · TSP</p>
+              <h2>Mis paradas en el mapa</h2>
+            </div>
+            {geocoding && (
+              <span className="geocoding-status">Geocodificando paradas...</span>
+            )}
+          </div>
+          {stops.length > 0 ? (
+            <MapErrorBoundary height="340px">
+              <RouteMap
+                stops={stops}
+                route={optimizedStops}
+                routeGeometry={driverRouteGeometry ?? undefined}
+                activeStopId={activeStopId}
+                height="340px"
+              />
+            </MapErrorBoundary>
+          ) : geocoding ? (
+            <div className="skeleton-row" style={{ height: "340px" }} />
+          ) : (
+            <p className="map-hint">No se pudieron geocodificar las direcciones.</p>
+          )}
+        </article>
+      )}
 
       <section className="driver-route-layout">
         <article className="card driver-route-card">
@@ -230,6 +320,41 @@ export const DriverRoutePage = () => {
                         ? "Esta parada ya quedo cerrada. Abre la siguiente entrega para continuar el turno."
                         : "No tienes otra entrega activa en este momento.")}
                   </p>
+                </div>
+
+                <div className="driver-action-panel__buttons">
+                  {navigationTarget ? (
+                    <>
+                      <a
+                        className="button primary"
+                        href={getWazeUrl(navigationTarget.lat, navigationTarget.lng)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Abrir Waze
+                      </a>
+                      <a
+                        className="button ghost"
+                        href={getGoogleMapsUrl(navigationTarget.lat, navigationTarget.lng)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Abrir Google Maps
+                      </a>
+                    </>
+                  ) : null}
+                  {nextRoutePedido ? (
+                    <Link
+                      className="button ghost"
+                      to={getDriverRoutePath(nextRoutePedido.id)}
+                    >
+                      Siguiente parada
+                    </Link>
+                  ) : selectedActions.length === 0 ? (
+                    <Link className="button primary" to={APP_ROUTES.driverDeliveries}>
+                      Finalizar ruta
+                    </Link>
+                  ) : null}
                 </div>
 
                 {selectedActions.length > 0 ? (

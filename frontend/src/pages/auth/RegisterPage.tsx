@@ -7,7 +7,7 @@ import { APP_ROUTES } from "../../router/paths";
 import type { UserRole } from "../../types/auth";
 import { getDefaultRouteByRole, ROLE_LABELS } from "../../utils/roleRedirect";
 
-const PUBLIC_REGISTER_ROLES: UserRole[] = ["CLIENTE"];
+const PUBLIC_REGISTER_ROLES: UserRole[] = ["CLIENTE", "GERENTE", "REPARTIDOR"];
 
 export const RegisterPage = () => {
   const navigate = useNavigate();

@@ -12,6 +12,8 @@ export interface PedidoMetrics {
   prioritarios: number;
   fragiles: number;
   contraEntrega: number;
+  alertasRetraso: number;
+  conTiempoEstimado: number;
 }
 
 export interface ZoneSummary {
@@ -56,6 +58,8 @@ export const getPedidoMetrics = (pedidos: Pedido[]): PedidoMetrics => {
     prioritarios: pedidos.filter((pedido) => pedido.prioritario).length,
     fragiles: pedidos.filter((pedido) => pedido.fragil).length,
     contraEntrega: pedidos.filter((pedido) => pedido.tipoCobro === "CONTRA_ENTREGA").length,
+    alertasRetraso: pedidos.filter((pedido) => pedido.alertaRetraso).length,
+    conTiempoEstimado: pedidos.filter((pedido) => Boolean(pedido.tiempoEstimadoMinutos)).length,
   };
 };
 
