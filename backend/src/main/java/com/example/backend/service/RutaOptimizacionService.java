@@ -50,10 +50,15 @@ public class RutaOptimizacionService {
 
     private final PedidoRepository pedidoRepository;
     private final UsuarioRepository usuarioRepository;
+    private final OsrmService osrmService;
 
-    public RutaOptimizacionService(PedidoRepository pedidoRepository, UsuarioRepository usuarioRepository) {
+    public RutaOptimizacionService(
+            PedidoRepository pedidoRepository,
+            UsuarioRepository usuarioRepository,
+            OsrmService osrmService) {
         this.pedidoRepository = pedidoRepository;
         this.usuarioRepository = usuarioRepository;
+        this.osrmService = osrmService;
     }
 
     public RutasOptimizadasResponse generarRutasOptimizadas() {
@@ -149,7 +154,8 @@ public class RutaOptimizacionService {
         for (int i = 0; i < vehiculos.size(); i++) {
             VehiculoRuta vehiculo = vehiculos.get(i);
             Usuario repartidor = i < repartidores.size() ? repartidores.get(i) : null;
-            List<Pedido> pedidosOrdenados = ordenarPorVecinoMasCercano(vehiculo.pedidos);
+            RutaCalculada rutaCalculada = calcularRutaVehiculo(vehiculo.pedidos);
+            List<Pedido> pedidosOrdenados = rutaCalculada.pedidosOrdenados();
             asignarRepartidorSiExiste(pedidosOrdenados, repartidor);
             String nombreVehiculo = repartidor != null && repartidor.getVehiculo() != null && !repartidor.getVehiculo().isBlank()
                     ? repartidor.getVehiculo()
@@ -168,8 +174,8 @@ public class RutaOptimizacionService {
                     vehiculo.cargaKg(),
                     pedidosOrdenados,
                     paradas,
-                    crearGeometry(paradas),
-                    calcularDistanciaEstimada(pedidosOrdenados)));
+                    crearRouteGeometry(paradas),
+                    rutaCalculada.distanciaEstimada()));
         }
 
         return respuestas;
@@ -209,17 +215,94 @@ public class RutaOptimizacionService {
                 .toList();
     }
 
-    private List<double[]> crearGeometry(List<GeoStopRequest> paradas) {
+    private List<double[]> crearRouteGeometry(List<GeoStopRequest> paradas) {
         if (paradas.isEmpty()) {
             return List.of();
         }
 
-        List<double[]> geometry = new ArrayList<>();
-        geometry.add(new double[]{BASE_COORDENADAS.lat(), BASE_COORDENADAS.lng()});
-        for (GeoStopRequest parada : paradas) {
-            geometry.add(new double[]{parada.lat(), parada.lng()});
+        List<double[]> geometry = osrmService.getRouteGeometry(crearParadasConBase(paradas));
+        if (geometry == null || geometry.size() < 2) {
+            return List.of();
         }
+
         return geometry;
+    }
+
+    private RutaCalculada calcularRutaVehiculo(List<Pedido> pedidos) {
+        RutaCalculada rutaPorCalles = calcularRutaPorCalles(pedidos);
+        if (rutaPorCalles != null) {
+            return rutaPorCalles;
+        }
+
+        List<Pedido> pedidosOrdenados = ordenarPorVecinoMasCercano(pedidos);
+        return new RutaCalculada(pedidosOrdenados, calcularDistanciaEstimada(pedidosOrdenados));
+    }
+
+    private RutaCalculada calcularRutaPorCalles(List<Pedido> pedidos) {
+        if (pedidos.isEmpty()) {
+            return new RutaCalculada(List.of(), 0);
+        }
+
+        List<GeoStopRequest> routeStops = crearParadasConBase(crearParadas(pedidos));
+        RouteCostMatrix costMatrix = osrmService.getRouteCostMatrix(routeStops);
+        if (costMatrix == null || costMatrix.weightedDurationSeconds().length != routeStops.size()) {
+            return null;
+        }
+
+        double[][] weightedDurationMatrix = costMatrix.weightedDurationSeconds();
+        double[][] distanceMatrix = costMatrix.distanceMeters();
+        List<Integer> pendientes = new ArrayList<>();
+        for (int i = 1; i < routeStops.size(); i++) {
+            pendientes.add(i);
+        }
+
+        List<Pedido> pedidosOrdenados = new ArrayList<>();
+        int actual = 0;
+        double totalMetros = 0.0;
+
+        while (!pendientes.isEmpty()) {
+            int posicionMasCercana = 0;
+            double costoMasCercano = valorMatriz(weightedDurationMatrix, actual, pendientes.get(0));
+
+            for (int i = 1; i < pendientes.size(); i++) {
+                double costo = valorMatriz(weightedDurationMatrix, actual, pendientes.get(i));
+                if (costo < costoMasCercano) {
+                    costoMasCercano = costo;
+                    posicionMasCercana = i;
+                }
+            }
+
+            int siguiente = pendientes.remove(posicionMasCercana);
+            totalMetros += valorMatriz(distanceMatrix, actual, siguiente);
+            pedidosOrdenados.add(pedidos.get(siguiente - 1));
+            actual = siguiente;
+        }
+
+        return new RutaCalculada(pedidosOrdenados, Math.round(totalMetros / 100.0) / 10.0);
+    }
+
+    private double valorMatriz(double[][] matrix, int desde, int hasta) {
+        if (desde >= matrix.length || hasta >= matrix[desde].length) {
+            return Double.POSITIVE_INFINITY;
+        }
+        double value = matrix[desde][hasta];
+        return Double.isFinite(value) && value >= 0 ? value : Double.POSITIVE_INFINITY;
+    }
+
+    private List<GeoStopRequest> crearParadasConBase(List<GeoStopRequest> paradas) {
+        List<GeoStopRequest> routeStops = new ArrayList<>();
+        routeStops.add(new GeoStopRequest(
+                0L,
+                BASE_COORDENADAS.lat(),
+                BASE_COORDENADAS.lng(),
+                BASE_DIRECCION,
+                "Base de despacho",
+                false,
+                null,
+                false,
+                null));
+        routeStops.addAll(paradas);
+        return routeStops;
     }
 
     private List<Pedido> ordenarPorVecinoMasCercano(List<Pedido> pedidos) {
@@ -377,6 +460,9 @@ public class RutaOptimizacionService {
     }
 
     private record GeoPoint(double lat, double lng) {
+    }
+
+    private record RutaCalculada(List<Pedido> pedidosOrdenados, double distanciaEstimada) {
     }
 
     private static class VehiculoRuta {

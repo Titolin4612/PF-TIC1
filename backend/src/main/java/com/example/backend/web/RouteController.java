@@ -3,6 +3,7 @@ package com.example.backend.web;
 import com.example.backend.dto.GeoStopRequest;
 import com.example.backend.dto.RouteOptimizationResponse;
 import com.example.backend.service.OsrmService;
+import com.example.backend.service.RouteCostMatrix;
 import com.example.backend.service.TspService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -32,15 +33,15 @@ public class RouteController {
             return new RouteOptimizationResponse(List.copyOf(stops), 0, null);
         }
 
-        // 1. Try road distances from OSRM for better TSP ordering
-        double[][] distMatrix = osrmService.getDistanceMatrix(stops);
+        // 1. Try road durations from OSRM, adjusted by congestion, for better TSP ordering.
+        RouteCostMatrix costMatrix = osrmService.getRouteCostMatrix(stops);
 
         List<GeoStopRequest> optimized;
         double totalKm;
 
-        if (distMatrix != null) {
-            optimized = tspService.nearestNeighborTSP(stops, distMatrix);
-            totalKm = tspService.totalDistanceKm(optimized, stops, distMatrix);
+        if (costMatrix != null) {
+            optimized = tspService.nearestNeighborTSP(stops, costMatrix.weightedDurationSeconds());
+            totalKm = tspService.totalDistanceKm(optimized, stops, costMatrix.distanceMeters());
         } else {
             optimized = tspService.nearestNeighborTSP(stops);
             totalKm = tspService.totalDistanceKm(optimized);

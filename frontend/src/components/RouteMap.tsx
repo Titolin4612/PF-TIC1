@@ -126,26 +126,10 @@ export function RouteMap({
             weight: 4,
             opacity: 0.82,
           }).addTo(layerGroup);
-          return;
-        }
-
-        if (group.stops.length > 1) {
-          L.polyline(group.stops.map((s) => [s.lat, s.lng] as [number, number]), {
-            color: group.color,
-            weight: 4,
-            opacity: 0.82,
-          }).addTo(layerGroup);
         }
       });
     } else if (safeRouteGeometry.length > 1) {
       L.polyline(safeRouteGeometry, {
-        color: "#2563eb",
-        weight: 4,
-        opacity: 0.8,
-      }).addTo(layerGroup);
-    } else if (routeLine.length > 1) {
-      const latLngs = routeLine.map((s) => [s.lat, s.lng] as [number, number]);
-      L.polyline(latLngs, {
         color: "#2563eb",
         weight: 4,
         opacity: 0.8,
